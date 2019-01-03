@@ -1,4 +1,5 @@
 imapclient
+pyyaml
 
 pytest
 faker
