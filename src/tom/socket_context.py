@@ -20,6 +20,7 @@ class SocketContextConnected(SocketContext):
     status: SocketStatus = SocketStatus.CONNECTED
     local_endpoint: Endpoint
     remote_endpoint: Endpoint
+    next_seq: int = 0
 
     def __init__(self, local_endpoint: Endpoint, remote_endpoint: Endpoint):
         self.local_endpoint = local_endpoint

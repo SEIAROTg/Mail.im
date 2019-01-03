@@ -4,6 +4,7 @@ import smtplib
 import imapclient
 from . import Credential, Endpoint
 from .socket_context import *
+from .packet import Packet
 
 
 class Mailbox:
@@ -69,8 +70,16 @@ class Mailbox:
         pass
 
     def socket_send(self, sid: int, buf: bytes) -> int:
-        # TODO
-        pass
+        context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
+        seq = context.next_seq
+        context.next_seq += 1
+        packet = Packet(seq, buf)
+        msg = packet.to_message()
+        # TODO: escape port
+        msg.add_header('From', '"{}" <{}>'.format(context.local_endpoint.port, context.local_endpoint.address))
+        msg.add_header('To', '"{}" <{}>'.format(context.remote_endpoint.port, context.remote_endpoint.address))
+        self.__transport.sendmail(context.local_endpoint.address, context.remote_endpoint.address, msg.as_bytes())
+        return len(buf)
 
     def socket_recv(self, sid: int, size: int, timeout: Optional[float]) -> Optional[bytes]:
         # TODO
