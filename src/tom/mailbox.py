@@ -1,7 +1,8 @@
+from typing import Optional
 import threading
 import smtplib
 import imapclient
-from . import Credential
+from . import Credential, Endpoint
 
 
 class Mailbox:
@@ -41,5 +42,25 @@ class Mailbox:
             return sid
 
     def socket_close(self, sid: int):
+        # TODO
+        pass
+
+    def socket_connect(self, sid: int, local_endpoint: Endpoint, remote_endpoint: Endpoint):
+        # TODO
+        pass
+
+    def socket_listen(self, sid: int, local_endpoint: Endpoint):
+        # TODO
+        pass
+
+    def socket_accept(self, sid: int, timeout: Optional[float]) -> int:
+        # TODO
+        pass
+
+    def socket_send(self, sid: int, buf: bytes) -> int:
+        # TODO
+        pass
+
+    def socket_recv(self, sid: int, size: int, timeout: Optional[float]) -> Optional[bytes]:
         # TODO
         pass
