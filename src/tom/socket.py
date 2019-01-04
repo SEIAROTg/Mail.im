@@ -35,5 +35,5 @@ class Socket:
     def send(self, buf: bytes) -> int:
         return self.__mailbox.socket_send(self.__id, buf)
 
-    def recv(self, size: int, timeout: Optional[float]) -> bytes:
+    def recv(self, size: int, timeout: Optional[float] = None) -> bytes:
         return self.__mailbox.socket_recv(self.__id, size, timeout)

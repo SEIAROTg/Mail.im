@@ -1,4 +1,5 @@
 from enum import Enum
+import threading
 from . import Endpoint
 
 
@@ -21,7 +22,10 @@ class SocketContextConnected(SocketContext):
     local_endpoint: Endpoint
     remote_endpoint: Endpoint
     next_seq: int = 0
+    incoming_data: bytes = b''
+    cv: threading.Condition
 
     def __init__(self, local_endpoint: Endpoint, remote_endpoint: Endpoint):
         self.local_endpoint = local_endpoint
         self.remote_endpoint = remote_endpoint
+        self.cv = threading.Condition()
