@@ -62,7 +62,7 @@ def Packet():
     # assume payload is directly fed to mailbox as message
     with patch('src.tom.mailbox.Packet') as fixture, patch('email.message_from_bytes') as message_from_bytes:
         message_from_bytes.side_effect = lambda x: x
-        fixture.from_message.side_effect = lambda x: Mock(payload=x)
+        fixture.from_message.side_effect = lambda x: Mock(seq=x[0], payload=x[1])
         yield fixture
 
 
@@ -151,7 +151,7 @@ def test_recv(feed_mailbox, store, faker: Faker, endpoints: Tuple[Endpoint, Endp
     messages = {
         uid: {
             b'ENVELOPE': make_envelope(*reversed(endpoints)),
-            b'BODY[]': payload,
+            b'BODY[]': (0, payload),
         }
     }
 
@@ -168,49 +168,39 @@ def test_recv(feed_mailbox, store, faker: Faker, endpoints: Tuple[Endpoint, Endp
 
 @pytest.mark.timeout(5)
 def test_recv_multiple_packets(feed_mailbox, store, faker: Faker, endpoints: Tuple[Endpoint, Endpoint]):
-    payload = faker.binary(300)
+    payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
     uids = faker.pylist(3, False, int)
     messages = {
-        uids[0]: {
+        uids[i]: {
             b'ENVELOPE': make_envelope(*reversed(endpoints)),
-            b'BODY[]': payload[:111]
-        },
-        uids[1]: {
-            b'ENVELOPE': make_envelope(*reversed(endpoints)),
-            b'BODY[]': payload[111:222]
-        },
-        uids[2]: {
-            b'ENVELOPE': make_envelope(*reversed(endpoints)),
-            b'BODY[]': payload[222:]
-        }
+            b'BODY[]': (i, payloads[i]),
+        } for i in range(3)
     }
 
     mailbox, ready = feed_mailbox(messages)
     socket = Socket(mailbox)
     socket.connect(*endpoints)
     ready.release()
-    ret = socket.recv(250)
+    ret = socket.recv(195)
     mailbox.close()
 
-    assert ret == payload[:250]
+    assert ret == b''.join(payloads)[:195]
     store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
 
 
 @pytest.mark.timeout(5)
 def test_recv_multiple_sockets(feed_mailbox, store, faker: Faker, endpoints: Tuple[Endpoint, Endpoint]):
     endpoints2 = (Endpoint(endpoints[0].address, '!' + endpoints[0].port), endpoints[1])
-    payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
-    uids = faker.pylist(3, False, int)
-    envelopes = [make_envelope(*reversed(endpoints)) for i in range(3)]
-    envelopes[0].to.clear()
-    envelopes[0].to.append(Address(name=endpoints2[0].port, route=None, mailbox=endpoints2[0].address, host=None))
-    envelopes[1].to.append(Address(name=endpoints2[0].port, route=None, mailbox=endpoints2[0].address, host=None))
+    payloads = [faker.binary(111), faker.binary(36), faker.binary(1), faker.binary(71), faker.binary(53)]
+    uids = faker.pylist(5, False, int)
+    seqs = [0, 0, 1, 2, 1]
+    targets = [endpoints, endpoints2, endpoints2, endpoints2, endpoints]
 
     messages = {
         uids[i]: {
-            b'ENVELOPE': envelopes[i],
-            b'BODY[]': payloads[i]
-        } for i in range(3)
+            b'ENVELOPE': make_envelope(endpoints[1], targets[i][0]),
+            b'BODY[]': (seqs[i], payloads[i]),
+        } for i in range(5)
     }
 
     mailbox, ready = feed_mailbox(messages)
@@ -219,12 +209,12 @@ def test_recv_multiple_sockets(feed_mailbox, store, faker: Faker, endpoints: Tup
     socket2 = Socket(mailbox)
     socket2.connect(*endpoints2)
     ready.release()
-    ret1 = socket1.recv(107)
-    ret2 = socket2.recv(147)
+    ret1 = socket1.recv(111 + 53)
+    ret2 = socket2.recv(36 + 1 + 71)
     mailbox.close()
 
-    assert ret1 == payloads[1] + payloads[2]
-    assert ret2 == payloads[0] + payloads[1]
+    assert ret1 == payloads[0] + payloads[4]
+    assert ret2 == payloads[1] + payloads[2] + payloads[3]
     store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
 
 
@@ -235,7 +225,7 @@ def test_recv_not_connected(feed_mailbox, store, faker: Faker, endpoints: Tuple[
     messages = {
         uid: {
             b'ENVELOPE': make_envelope(*reversed(endpoints)),
-            b'BODY[]': payload,
+            b'BODY[]': (0, payload),
         }
     }
 
@@ -253,7 +243,7 @@ def test_recv_invalid_packets(feed_mailbox, store, faker: Faker, Packet, endpoin
     messages = {
         uid: {
             b'ENVELOPE': make_envelope(*reversed(endpoints)),
-            b'BODY[]': payload,
+            b'BODY[]': (0, payload),
         }
     }
     Packet.from_message.side_effect = Exception('invalid packet')
@@ -263,3 +253,26 @@ def test_recv_invalid_packets(feed_mailbox, store, faker: Faker, Packet, endpoin
     mailbox.close()
 
     store.add_flags.assert_not_called()
+
+
+@pytest.mark.timeout(5)
+def test_recv_order(feed_mailbox, store, faker: Faker, Packet, endpoints: Tuple[Endpoint, Endpoint]):
+    payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
+    uids = faker.pylist(3, False, int)
+    seqs = [2, 0, 1]
+    messages = {
+        uids[i]: {
+            b'ENVELOPE': make_envelope(*reversed(endpoints)),
+            b'BODY[]': (seqs[i], payloads[i]),
+        } for i in range(3)
+    }
+
+    mailbox, ready = feed_mailbox(messages)
+    socket = Socket(mailbox)
+    socket.connect(*endpoints)
+    ready.release()
+    ret = socket.recv(218)
+    mailbox.close()
+
+    assert ret == payloads[1] + payloads[2] + payloads[0]
+    store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])

@@ -100,10 +100,17 @@ class Mailbox:
         ret = b''
         with context.cv:
             while size > 0 and (timeout is None or timeout > 0):
-                if context.incoming_data:
-                    seg, context.incoming_data = context.incoming_data[:size], context.incoming_data[size:]
-                    size -= len(seg)
+                seq, off = context.recv_cursor
+                packet = context.pending_remote.get(seq)
+                if not packet is None:
+                    seg = packet.payload[off:off + size]
                     ret += seg
+                    size -= len(seg)
+                    if off + len(seg) >= len(packet.payload):
+                        context.recv_cursor = (seq + 1, 0)
+                        del context.pending_remote[seq]
+                    else:
+                        context.recv_cursor = (seq, off + len(seg))
                 else:
                     start = time.time()
                     context.cv.wait(timeout)
@@ -178,7 +185,7 @@ class Mailbox:
                     continue
                 context: SocketContextConnected = self.__sockets[sid]
                 with context.cv:
-                    context.incoming_data += packet.payload
+                    context.pending_remote[packet.seq] = packet
                     context.cv.notifyAll()
                 seen = True
 

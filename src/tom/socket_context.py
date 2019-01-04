@@ -1,6 +1,8 @@
 from enum import Enum
+from typing import Dict, Tuple
 import threading
 from . import Endpoint
+from .packet import Packet
 
 
 class SocketStatus(Enum):
@@ -22,10 +24,12 @@ class SocketContextConnected(SocketContext):
     local_endpoint: Endpoint
     remote_endpoint: Endpoint
     next_seq: int = 0
-    incoming_data: bytes = b''
+    recv_cursor: Tuple[int, int] = (0, 0)
+    pending_remote: Dict[int, Packet]
     cv: threading.Condition
 
     def __init__(self, local_endpoint: Endpoint, remote_endpoint: Endpoint):
         self.local_endpoint = local_endpoint
         self.remote_endpoint = remote_endpoint
+        self.pending_remote = {}
         self.cv = threading.Condition()
