@@ -1,4 +1,5 @@
 from typing import Tuple, Optional
+import time
 import threading
 from email.mime.multipart import MIMEMultipart
 from unittest.mock import patch, MagicMock, Mock
@@ -276,3 +277,17 @@ def test_recv_order(feed_mailbox, store, faker: Faker, Packet, endpoints: Tuple[
 
     assert ret == payloads[1] + payloads[2] + payloads[0]
     store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
+
+
+@pytest.mark.timeout(5)
+def test_close_unblock_recv(mailbox: Mailbox, endpoints: Tuple[Endpoint, Endpoint]):
+    socket = Socket(mailbox)
+    socket.connect(*endpoints)
+
+    def close():
+        time.sleep(0.2)
+        socket.close()
+    thread = threading.Thread(target=close)
+    thread.start()
+    socket.recv(100)
+    thread.join()

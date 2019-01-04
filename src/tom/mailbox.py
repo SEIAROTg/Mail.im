@@ -62,6 +62,15 @@ class Mailbox:
     def socket_close(self, sid: int):
         with self.__mutex:
             if sid in self.__sockets:
+                context = self.__sockets[sid]
+                context.closed = True
+                if context.status == SocketStatus.CONNECTED:
+                    context: SocketContextConnected
+                    with context.cv:
+                        context.cv.notifyAll()
+                elif context.status == SocketStatus.LISTENING:
+                    # TODO
+                    pass
                 del self.__sockets[sid]
 
     def socket_connect(self, sid: int, local_endpoint: Endpoint, remote_endpoint: Endpoint):
@@ -99,7 +108,7 @@ class Mailbox:
             context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
         ret = b''
         with context.cv:
-            while size > 0 and (timeout is None or timeout > 0):
+            while not context.closed and size > 0 and (timeout is None or timeout > 0):
                 seq, off = context.recv_cursor
                 packet = context.pending_remote.get(seq)
                 if not packet is None:

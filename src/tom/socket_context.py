@@ -13,6 +13,7 @@ class SocketStatus(Enum):
 
 class SocketContext:
     status: SocketStatus = SocketStatus.CREATED
+    closed: bool = False
 
 
 class SocketContextListening(SocketContext):
