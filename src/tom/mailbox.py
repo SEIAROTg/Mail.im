@@ -1,4 +1,6 @@
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, Callable, List, Any
+import heapq
+import functools
 import email
 import threading
 import time
@@ -8,20 +10,25 @@ import imapclient.response_types
 from . import Credential, Endpoint
 from .socket_context import *
 from .packet import Packet
+from ..config import config
 
 
 class Mailbox:
-    __closed: bool = False
+    __thread_listener: threading.Thread
+    __thread_timer: threading.Thread
+    __cv_timer: threading.Condition
+    __mutex: threading.RLock
+    # protected by mutex
     __next_socket_id = 0
     __sockets: Dict[int, SocketContext]
     __connected_sockets: Dict[Tuple[Endpoint, Endpoint], int]
-    __mutex: threading.RLock
-
     __transport: smtplib.SMTP
+    # protected by __cv_timer
+    __scheduled_tasks: List[Tuple[float, Callable]]
+    __closed: bool = False
+    # only used by __thread_listener
     __store: imapclient.IMAPClient
     __listener: imapclient.IMAPClient
-
-    __thread_listener: threading.Thread
 
     def __init__(self, smtp: Credential, imap: Credential):
         self.__sockets = {}
@@ -32,25 +39,33 @@ class Mailbox:
         self.__store = self.__init_imap(imap)
         self.__listener = self.__init_imap(imap)
 
+        self.__cv_timer = threading.Condition()
+        self.__scheduled_tasks = []
+
         self.__thread_listener = threading.Thread(target=self.__listen)
         self.__thread_listener.start()
+
+        self.__thread_timer = threading.Thread(target=self.__timer)
+        self.__thread_timer.start()
 
     def __del__(self):
         self.close()
 
     def close(self):
-        with self.__mutex:
+        with self.__cv_timer:
             if self.__closed:
                 return
             self.__closed = True
+            self.__cv_timer.notifyAll()
         self.__transport.close()
         self.__store.logout()
         self.__listener.idle_done()
         self.__listener.logout()
-        self.__thread_listener.join()
+        self.join()
 
     def join(self):
         self.__thread_listener.join()
+        self.__thread_timer.join()
 
     def socket_create(self) -> int:
         with self.__mutex:
@@ -90,32 +105,26 @@ class Mailbox:
         pass
 
     def socket_send(self, sid: int, buf: bytes) -> int:
-        with self.__mutex:
-            context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
-        seq = context.next_seq
-        context.next_seq += 1
-        packet = Packet(seq, buf)
-        msg = packet.to_message()
-        # TODO: escape port
-        msg.add_header('From', '"{}" <{}>'.format(context.local_endpoint.port, context.local_endpoint.address))
-        msg.add_header('To', '"{}" <{}>'.format(context.remote_endpoint.port, context.remote_endpoint.address))
-        with self.__mutex:
-            self.__transport.sendmail(context.local_endpoint.address, context.remote_endpoint.address, msg.as_bytes())
+        context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
+        with context.cv:
+            seq = context.next_seq
+            context.next_seq += 1
+            context.pending_local[seq] = buf
+            self.__task_transmit(sid, seq)
         return len(buf)
 
     def socket_recv(self, sid: int, size: int, timeout: Optional[float] = None) -> Optional[bytes]:
-        with self.__mutex:
-            context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
+        context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
         ret = b''
         with context.cv:
             while not context.closed and size > 0 and (timeout is None or timeout > 0):
                 seq, off = context.recv_cursor
-                packet = context.pending_remote.get(seq)
-                if not packet is None:
-                    seg = packet.payload[off:off + size]
+                payload = context.pending_remote.get(seq)
+                if not payload is None:
+                    seg = payload[off:off + size]
                     ret += seg
                     size -= len(seg)
-                    if off + len(seg) >= len(packet.payload):
+                    if off + len(seg) >= len(payload):
                         context.recv_cursor = (seq + 1, 0)
                         del context.pending_remote[seq]
                     else:
@@ -128,13 +137,14 @@ class Mailbox:
         return ret
 
     def __socket_check_status(self, sid: int, status: SocketStatus) -> SocketContext:
-        if not sid in self.__sockets:
-            raise Exception('socket does not exist')
-        context = self.__sockets[sid]
-        if context.status != status:
-            raise Exception('invalid status of socket: expected "{}", got "{}"'
-                            .format(status, context.status))
-        return context
+        with self.__mutex:
+            if not sid in self.__sockets:
+                raise Exception('socket does not exist')
+            context = self.__sockets[sid]
+            if context.status != status:
+                raise Exception('invalid status of socket: expected "{}", got "{}"'
+                                .format(status, context.status))
+            return context
 
     @staticmethod
     def __init_smtp(credential: Credential) -> smtplib.SMTP:
@@ -177,7 +187,7 @@ class Mailbox:
         if seens:
             self.__store.add_flags(seens, [imapclient.SEEN])
 
-    def __process_incoming_packet(self, message: Dict[bytes, bytes]) -> bool:
+    def __process_incoming_packet(self, message: Dict[bytes, Any]) -> bool:
         msg = email.message_from_bytes(message[b'BODY[]'])
         envelope: imapclient.response_types.Envelope = message[b'ENVELOPE']
         if envelope.sender[0].mailbox != envelope.from_[0].mailbox:
@@ -194,8 +204,84 @@ class Mailbox:
                     continue
                 context: SocketContextConnected = self.__sockets[sid]
                 with context.cv:
-                    context.pending_remote[packet.seq] = packet
-                    context.cv.notifyAll()
+                    for ack_seq, ack_attempt in packet.acks:
+                        self.__process_ack(sid, ack_seq, ack_attempt)
+                    if packet.seq != -1: # no action for pure ack
+                        context.pending_remote[packet.seq] = packet.payload
+                        context.to_ack.add((packet.seq, packet.attempt))
+                        self.__schedule_task(
+                            config['tom']['ATO'] / 1000,
+                            functools.partial(self.__task_send_ack, sid, context.next_seq))
+                        context.cv.notifyAll()
                 seen = True
 
         return seen
+
+    def __process_ack(self, sid: int, seq: int, attempt: int):
+        context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
+        total_attempts = context.attempts.get(seq)
+        if total_attempts is None:
+            # duplicated ack
+            return
+        del context.pending_local[seq]
+        context.to_ack -= context.sent_acks[(seq, attempt)]
+        for i in range(total_attempts):
+            del context.sent_acks[(seq, i)]
+        del context.attempts[seq]
+
+    def __timer(self):
+        with self.__cv_timer:
+            while not self.__closed:
+                if self.__scheduled_tasks:
+                    scheduled_time, task = self.__scheduled_tasks[0]
+                    now = time.time()
+                    if scheduled_time <= now:
+                        heapq.heappop(self.__scheduled_tasks)
+                        try:
+                            task()
+                        except Exception:
+                            # TODO: exception handling for scheduled tasks
+                            pass
+                    else:
+                        self.__cv_timer.wait(scheduled_time - now)
+                else:
+                    self.__cv_timer.wait()
+
+    def __schedule_task(self, delay: float, task: Callable):
+        with self.__cv_timer:
+            heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
+            self.__cv_timer.notifyAll()
+
+    def __task_transmit(self, sid: int, seq: int):
+        context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
+        with context.cv:
+            acks = set(context.to_ack)
+            local_endpoint, remote_endpoint = context.local_endpoint, context.remote_endpoint
+            if seq == -1:
+                packet = Packet(context.local_endpoint, context.remote_endpoint, seq, 0, acks, b'')
+            elif not seq in context.pending_local:
+                # already acked
+                return
+            else:
+                attempt = context.attempts[seq]
+                context.attempts[seq] += 1
+                context.sent_acks[(seq, attempt)] = acks
+                packet = Packet(
+                    context.local_endpoint,
+                    context.remote_endpoint, seq,
+                    attempt, acks,
+                    context.pending_local[seq])
+        msg = packet.to_message()
+        with self.__mutex:
+            self.__transport.sendmail(local_endpoint.address, remote_endpoint.address, msg.as_bytes())
+        if seq != -1: # do not retransmit pure acks
+            self.__schedule_task(config['tom']['RTO'] / 1000, functools.partial(self.__task_transmit, sid, seq))
+
+    def __task_send_ack(self, sid: int, next_seq: int):
+        context: SocketContextConnected = self.__socket_check_status(sid, SocketStatus.CONNECTED)
+        with context.cv:
+            if context.next_seq != next_seq:
+                # another packet carrying ack has been sent
+                return
+        # pure ack does not consume seq number
+        self.__task_transmit(sid, -1)
