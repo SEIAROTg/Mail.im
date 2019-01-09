@@ -21,6 +21,9 @@ def helper() -> SocketTestHelper:
     helper.close()
 
 
+# connect
+
+
 def test_connect(helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
@@ -43,10 +46,129 @@ def test_connect_invalid_status(helper: SocketTestHelper):
     assert execinfo.match('invalid status of socket')
 
 
+# listen
+
+
+def test_listen(helper: SocketTestHelper):
+    endpoint = helper.fake_endpoint()
+    listening_sockets = helper.create_listening_socket(endpoint)
+    listening_sockets.close()
+
+
+def test_listen_address_in_use(helper: SocketTestHelper):
+    endpoint = helper.fake_endpoint()
+    listening_sockets = helper.create_listening_socket(endpoint)
+    with pytest.raises(Exception) as execinfo:
+        helper.create_listening_socket(Endpoint(endpoint.address, ''))
+    assert execinfo.match('address already in use')
+
+
+def test_listen_invalid_status(helper: SocketTestHelper):
+    listening_sockets = helper.create_listening_socket()
+    with pytest.raises(Exception) as execinfo:
+        listening_sockets.listen(helper.fake_endpoint())
+    assert execinfo.match('invalid status of socket')
+
+
+# accept
+
+@pytest.mark.timeout(5)
+def test_accept(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    listening_socket = helper.create_listening_socket(endpoints[1])
+
+    helper.feed_messages({faker.pyint(): Packet(*endpoints, 0, 0, set(), payload)})
+    socket = listening_socket.accept()
+    data = socket.recv(111)
+    assert data == payload
+
+
+@pytest.mark.timeout(5)
+def test_accept_multiple(faker: Faker, helper: SocketTestHelper):
+    payloads = [faker.binary(111) for i in range(3)]
+    endpoints = [helper.fake_endpoints() for i in range(3)]
+    listening_socket = helper.create_listening_socket(Endpoint('', ''))
+
+    helper.feed_messages({
+        faker.pyint(): Packet(*endpoints[i], 0, 0, set(), payloads[i]) for i in range(3)
+    })
+    for i in range(3):
+        socket = listening_socket.accept()
+        data = socket.recv(111)
+        assert data == payloads[i]
+
+
+@pytest.mark.timeout(5)
+def test_accept_multiple_sockets(faker: Faker, helper: SocketTestHelper):
+    payloads = [faker.binary(111) for i in range(3)]
+    endpoints = [helper.fake_endpoints() for i in range(3)]
+    listening_sockets = [helper.create_listening_socket(endpoints[i][0]) for i in range(3)]
+
+    helper.feed_messages({
+        faker.pyint(): Packet(*reversed(endpoints[i]), 0, 0, set(), payloads[i]) for i in range(3)
+    })
+
+    for i in range(3):
+        socket = listening_sockets[i].accept()
+        data = socket.recv(111)
+        assert data == payloads[i]
+
+
+@pytest.mark.timeout(5)
+def test_accept_timeout(helper: SocketTestHelper):
+    listening_sockets = helper.create_listening_socket()
+    listening_sockets.accept(timeout=0)
+
+
+@pytest.mark.timeout(5)
+def test_accept_defer_ack(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    listening_sockets = helper.create_listening_socket(endpoints[0])
+
+    helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload)})
+    helper.assert_not_sent(Packet(*endpoints, -1, 0, set([(0, 0)]), b''), 1.5)
+    socket = listening_sockets.accept()
+    helper.assert_sent(Packet(*endpoints, -1, 0, set([(0, 0)]), b''), 1.5, 0.5)
+    data = socket.recv(111)
+    assert data == payload
+
+
+# close
+
+
 def test_close_connected(helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     helper.create_connected_socket(*endpoints).close()
     helper.create_connected_socket(*endpoints)
+
+
+def test_close_listening(helper: SocketTestHelper):
+    endpoint = helper.fake_endpoint()
+    helper.create_listening_socket(endpoint).close()
+    helper.create_listening_socket(endpoint)
+
+
+@pytest.mark.timeout(5)
+def test_close_unblock_recv(helper: SocketTestHelper):
+    socket = helper.create_connected_socket()
+
+    def close():
+        time.sleep(0.2)
+        socket.close()
+    thread = threading.Thread(target=close)
+    thread.start()
+    socket.recv(100)
+    thread.join()
+
+
+@pytest.mark.timout(5)
+def test_close_unblock_accept(helper: SocketTestHelper):
+    # TODO
+    pass
+
+# send
 
 
 @pytest.mark.timeout(5)
@@ -59,7 +181,7 @@ def test_send(faker: Faker, helper: SocketTestHelper):
     socket.send(payload)
     socket.close()
 
-    helper.assert_sent(socket, packet)
+    helper.assert_sent(packet)
 
 
 @pytest.mark.timeout(5)
@@ -69,8 +191,8 @@ def test_send_retransmit(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_connected_socket(*endpoints)
 
     socket.send(payload)
-    helper.assert_sent(socket, Packet(*endpoints, 0, 0, set(), payload))
-    helper.assert_sent(socket, Packet(*endpoints, 0, 1, set(), payload), 1.5, 0.5)
+    helper.assert_sent(Packet(*endpoints, 0, 0, set(), payload))
+    helper.assert_sent(Packet(*endpoints, 0, 1, set(), payload), 1.5, 0.5)
 
 
 @pytest.mark.timeout(5)
@@ -80,10 +202,13 @@ def test_send_no_retransmit_after_pure_ack(faker: Faker, helper: SocketTestHelpe
     socket = helper.create_connected_socket(*endpoints)
 
     socket.send(payload)
-    helper.assert_sent(socket, Packet(*endpoints, 0, 0, set(), payload))
+    helper.assert_sent(Packet(*endpoints, 0, 0, set(), payload))
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), -1, 0, set([(0, 0)]), b'')})
-    helper.assert_not_sent(socket, Packet(*endpoints, 0, 1, set(), payload), 1.5)
-    helper.assert_not_sent(socket, Packet(*endpoints, 0, 1, set([-1]), payload))
+    helper.assert_not_sent(Packet(*endpoints, 0, 1, set(), payload), 1.5)
+    helper.assert_not_sent(Packet(*endpoints, 0, 1, set([-1]), payload))
+
+
+# recv
 
 
 @pytest.mark.timeout(5)
@@ -204,26 +329,13 @@ def test_recv_timeout(helper: SocketTestHelper):
 
 
 @pytest.mark.timeout(5)
-def test_close_unblock_recv(helper: SocketTestHelper):
-    socket = helper.create_connected_socket()
-
-    def close():
-        time.sleep(0.2)
-        socket.close()
-    thread = threading.Thread(target=close)
-    thread.start()
-    socket.recv(100)
-    thread.join()
-
-
-@pytest.mark.timeout(5)
 def test_recv_ack(faker: Faker, helper: SocketTestHelper):
     payload = faker.binary(111)
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
 
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload)})
-    helper.assert_sent(socket, Packet(*endpoints, -1, 0, set([(0, 0)]), b''), 1.5, 0.5)
+    helper.assert_sent(Packet(*endpoints, -1, 0, set([(0, 0)]), b''), 1.5, 0.5)
 
 
 @pytest.mark.timeout(5)
@@ -233,9 +345,9 @@ def test_recv_ack_to_non_pure_ack(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_connected_socket(*endpoints)
 
     socket.send(payload)
-    helper.assert_sent(socket, Packet(*endpoints, 0, 0, set(), payload))
+    helper.assert_sent(Packet(*endpoints, 0, 0, set(), payload))
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), 0, 0, set([(0, 0)]), payload)})
-    helper.assert_sent(socket, Packet(*endpoints, -1, 0, set([(0, 0)]), b''))
+    helper.assert_sent(Packet(*endpoints, -1, 0, set([(0, 0)]), b''))
 
 
 @pytest.mark.timeout(5)
@@ -245,6 +357,6 @@ def test_recv_no_ack_to_pure_ack(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_connected_socket(*endpoints)
 
     socket.send(payload)
-    helper.assert_sent(socket, Packet(*endpoints, 0, 0, set(), payload))
+    helper.assert_sent(Packet(*endpoints, 0, 0, set(), payload))
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), -1, 0, set([(0, 0)]), b'')})
-    helper.assert_not_sent(socket, Packet(*endpoints, -1, 0, set([(0, 0)]), b''), 1.5)
+    helper.assert_not_sent(Packet(*endpoints, -1, 0, set([(0, 0)]), b''), 1.5)

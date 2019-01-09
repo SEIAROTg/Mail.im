@@ -1,7 +1,6 @@
 from typing import Dict, Tuple, Deque, Optional
 from unittest.mock import patch, MagicMock, Mock
 from collections import deque
-from weakref import WeakValueDictionary
 import time
 import threading
 from imapclient import SEEN
@@ -18,7 +17,6 @@ class SocketTestHelper:
     __thread_mailbox: threading.Thread
 
     __faker: Faker
-    __sockets: WeakValueDictionary                         # (local_endpoint, remote_endpoint) -> Socket
     __messages: Dict[int, Packet]
     __send_queue: Deque[Packet]
     __closed: bool = False
@@ -43,7 +41,6 @@ class SocketTestHelper:
         self.__sem_send = threading.Semaphore(0)
         self.__cv_listen = threading.Condition(self.__mutex)
         self.__faker = Faker()
-        self.__sockets = WeakValueDictionary()
         self.__messages = {}
         self.__send_queue = deque()
         self.mock_config = patch.dict('src.tom.mailbox.config', self.__config_stub).start()
@@ -85,7 +82,12 @@ class SocketTestHelper:
         local_endpoint = local_endpoint or self.fake_endpoint()
         remote_endpoint = remote_endpoint or self.fake_endpoint()
         socket.connect(local_endpoint, remote_endpoint)
-        self.__sockets[(local_endpoint, remote_endpoint)] = socket
+        return socket
+
+    def create_listening_socket(self, local_endpoint: Optional[Endpoint] = None):
+        socket = Socket(self.__mailbox)
+        local_endpoint = local_endpoint or self.fake_endpoint()
+        socket.listen(local_endpoint)
         return socket
 
     def feed_messages(self, messages: Dict[int, Packet]):
@@ -94,21 +96,19 @@ class SocketTestHelper:
             self.__messages.update(messages)
             self.__cv_listen.notify(1)
 
-    def assert_sent(self, socket: Socket, packet: Packet, timeout: float = None, min_time: float = None):
+    def assert_sent(self, packet: Packet, timeout: float = None, min_time: float = None):
         start = time.time()
         assert self.__sem_send.acquire(timeout=timeout), 'packet has not been sent in time'
         with self.__mutex:
             sent_packet = self.__send_queue.popleft()
             assert sent_packet == packet, 'packet has not been sent in time'
-            assert socket == self.__sockets[(packet.from_, packet.to)], 'packet has not been sent in time'
             assert not min_time or start + min_time < time.time(), 'packet was sent too early'
 
-    def assert_not_sent(self, socket: Socket, packet: Packet, timeout: float = 0):
+    def assert_not_sent(self, packet: Packet, timeout: float = 0):
         time.sleep(timeout)
         with self.__mutex:
             for sent_packet in self.__send_queue:
-                assert sent_packet != packet or self.__sockets[(sent_packet.from_, sent_packet.to)] is not socket,\
-                    'packet has been sent'
+                assert sent_packet != packet, 'packet has been sent'
 
     def __sendmail_stub(self, from_address, to_address, packet: Packet):
         assert from_address == packet.from_.address

@@ -1,9 +1,8 @@
 from enum import Enum
-from typing import Dict, Tuple, Set, DefaultDict
-from collections import defaultdict
+from typing import Dict, Tuple, Set, DefaultDict, Deque
+from collections import defaultdict, deque
 import threading
 from . import Endpoint
-from .packet import Packet
 
 
 class SocketStatus(Enum):
@@ -15,10 +14,6 @@ class SocketStatus(Enum):
 class SocketContext:
     status: SocketStatus = SocketStatus.CREATED
     closed: bool = False
-
-
-class SocketContextListening(SocketContext):
-    status: SocketStatus = SocketStatus.LISTENING
 
 
 class SocketContextConnected(SocketContext):
@@ -42,4 +37,20 @@ class SocketContextConnected(SocketContext):
         self.sent_acks = {}
         self.attempts = defaultdict(int)
         self.to_ack = set()
+        self.cv = threading.Condition()
+
+
+class SocketContextListening(SocketContext):
+    status: SocketStatus = SocketStatus.LISTENING
+    local_endpoint: Endpoint
+    queue: Deque[int]                                           # [sid]
+    connected_sockets: Dict[Tuple[Endpoint, Endpoint], int]     # (local_endpoint, remote_endpoint) -> sid
+    sockets: Dict[int, SocketContextConnected]                  # sid -> context
+    cv: threading.Condition
+
+    def __init__(self, local_endpoint: Endpoint):
+        self.local_endpoint = local_endpoint
+        self.queue = deque()
+        self.connected_sockets = {}
+        self.sockets = {}
         self.cv = threading.Condition()
