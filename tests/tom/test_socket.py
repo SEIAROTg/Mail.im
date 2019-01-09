@@ -44,6 +44,12 @@ def test_connect_invalid_status(helper: SocketTestHelper):
     assert execinfo.match('invalid status of socket')
 
 
+def test_close_connected(helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    helper.create_connected_socket(*endpoints).close()
+    helper.create_connected_socket(*endpoints)
+
+
 @pytest.mark.timeout(5)
 def test_send(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()

@@ -83,6 +83,7 @@ class Mailbox:
                     context: SocketContextConnected
                     with context.cv:
                         context.cv.notifyAll()
+                    del self.__connected_sockets[(context.local_endpoint, context.remote_endpoint)]
                 elif context.status == SocketStatus.LISTENING:
                     # TODO
                     pass
