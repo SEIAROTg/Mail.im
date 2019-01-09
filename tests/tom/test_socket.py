@@ -18,7 +18,6 @@ def faker() -> Faker:
 def helper() -> SocketTestHelper:
     helper = SocketTestHelper()
     yield helper
-    print('helper teardown')
     helper.close()
 
 
@@ -30,7 +29,7 @@ def test_connect(helper: SocketTestHelper):
 
 def test_connect_address_in_use(helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
-    helper.create_connected_socket(*endpoints)
+    socket = helper.create_connected_socket(*endpoints)
     with pytest.raises(Exception) as execinfo:
         helper.create_connected_socket(*endpoints)
     assert execinfo.match('address already in use')

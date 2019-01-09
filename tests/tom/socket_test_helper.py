@@ -1,6 +1,7 @@
 from typing import Dict, Tuple, Deque, Optional
-from unittest.mock import patch, MagicMock, Mock, _patch
+from unittest.mock import patch, MagicMock, Mock
 from collections import deque
+from weakref import WeakValueDictionary
 import time
 import threading
 from imapclient import SEEN
@@ -17,7 +18,7 @@ class SocketTestHelper:
     __thread_mailbox: threading.Thread
 
     __faker: Faker
-    __sockets: Dict[Tuple[Endpoint, Endpoint], Socket]
+    __sockets: WeakValueDictionary                         # (local_endpoint, remote_endpoint) -> Socket
     __messages: Dict[int, Packet]
     __send_queue: Deque[Packet]
     __closed: bool = False
@@ -42,7 +43,7 @@ class SocketTestHelper:
         self.__sem_send = threading.Semaphore(0)
         self.__cv_listen = threading.Condition(self.__mutex)
         self.__faker = Faker()
-        self.__sockets = {}
+        self.__sockets = WeakValueDictionary()
         self.__messages = {}
         self.__send_queue = deque()
         self.mock_config = patch.dict('src.tom.mailbox.config', self.__config_stub).start()
@@ -78,8 +79,8 @@ class SocketTestHelper:
 
     def create_connected_socket(
             self,
-            local_endpoint :Optional[Endpoint] = None,
-            remote_endpoint :Optional[Endpoint] = None):
+            local_endpoint: Optional[Endpoint] = None,
+            remote_endpoint: Optional[Endpoint] = None):
         socket = Socket(self.__mailbox)
         local_endpoint = local_endpoint or self.fake_endpoint()
         remote_endpoint = remote_endpoint or self.fake_endpoint()
