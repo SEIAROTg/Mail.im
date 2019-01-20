@@ -1,5 +1,7 @@
 imapclient
 pyyaml
+argon2_cffi
+pycryptodome
 
 pytest
 faker
