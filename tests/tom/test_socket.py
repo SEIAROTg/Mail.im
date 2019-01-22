@@ -1,10 +1,7 @@
-from typing import Tuple, Optional
-import time
-import threading
 import imapclient
 import pytest
 from faker import Faker
-from src.tom import Endpoint, Mailbox, Socket
+from src.tom import Endpoint
 from .socket_test_helper import SocketTestHelper
 from src.tom.mailbox._packet import Packet
 
@@ -154,7 +151,9 @@ def test_close_listening(helper: SocketTestHelper):
 def test_close_unblock_recv(helper: SocketTestHelper):
     socket = helper.create_connected_socket()
     thread = helper.defer(socket.close, 0.2)
-    socket.recv(100)
+    with pytest.raises(Exception) as execinfo:
+        socket.recv(100)
+    assert execinfo.match('already closed')
     thread.join()
 
 
@@ -162,7 +161,9 @@ def test_close_unblock_recv(helper: SocketTestHelper):
 def test_close_unblock_accept(helper: SocketTestHelper):
     socket = helper.create_listening_socket()
     thread = helper.defer(socket.close, 0.2)
-    socket.accept()
+    with pytest.raises(Exception) as execinfo:
+        socket.accept()
+    assert execinfo.match('already closed')
     thread.join()
 
 

@@ -56,6 +56,8 @@ class MailboxSocketInterface(MailboxTasks):
                 context.cv.wait(timeout)
                 if timeout is not None:
                     timeout -= time.time() - start
+            if context.closed:
+                raise Exception('socket already closed')
             if not context.queue: # timeout
                 return None
             sid = context.queue.popleft()
@@ -80,7 +82,7 @@ class MailboxSocketInterface(MailboxTasks):
             self._task_transmit(sid, seq)
         return len(buf)
 
-    def socket_recv(self, sid: int, size: int, timeout: Optional[float] = None) -> Optional[bytes]:
+    def socket_recv(self, sid: int, size: int, timeout: Optional[float] = None) -> bytes:
         context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
         ret = b''
         with context.cv:
@@ -101,4 +103,6 @@ class MailboxSocketInterface(MailboxTasks):
                     context.cv.wait(timeout)
                     if not timeout is None:
                         timeout -= time.time() - start
-        return ret
+            if context.closed and not ret:
+                raise Exception('socket already closed')
+            return ret
