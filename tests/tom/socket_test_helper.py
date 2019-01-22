@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Deque, Optional
+from typing import Dict, Tuple, Deque, Optional, Callable, Any
 from unittest.mock import patch, MagicMock, Mock
 from collections import deque
 import time
@@ -97,6 +97,16 @@ class SocketTestHelper:
         with self.__cv_listen:
             self.__messages.update(messages)
             self.__cv_listen.notify(1)
+
+    def defer(self, func: Callable[[], Any], delay: float):
+
+        def target():
+            time.sleep(delay)
+            func()
+
+        thread = threading.Thread(target=target)
+        thread.start()
+        return thread
 
     def assert_sent(self, packet: Packet, timeout: float = None, min_time: float = None):
         start = time.time()

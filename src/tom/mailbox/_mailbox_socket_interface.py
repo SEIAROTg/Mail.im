@@ -51,7 +51,7 @@ class MailboxSocketInterface(MailboxTasks):
     def socket_accept(self, sid: int, timeout: Optional[float] = None) -> Optional[int]:
         context: _socket_context.Listening = self._socket_check_status(sid, _socket_context.Listening)
         with context.cv:
-            while not context.queue and (timeout is None or timeout > 0):
+            while not context.closed and not context.queue and (timeout is None or timeout > 0):
                 start = time.time()
                 context.cv.wait(timeout)
                 if timeout is not None:

@@ -153,20 +153,18 @@ def test_close_listening(helper: SocketTestHelper):
 @pytest.mark.timeout(5)
 def test_close_unblock_recv(helper: SocketTestHelper):
     socket = helper.create_connected_socket()
-
-    def close():
-        time.sleep(0.2)
-        socket.close()
-    thread = threading.Thread(target=close)
-    thread.start()
+    thread = helper.defer(socket.close, 0.2)
     socket.recv(100)
     thread.join()
 
 
-@pytest.mark.timout(5)
+@pytest.mark.timeout(5)
 def test_close_unblock_accept(helper: SocketTestHelper):
-    # TODO
-    pass
+    socket = helper.create_listening_socket()
+    thread = helper.defer(socket.close, 0.2)
+    socket.accept()
+    thread.join()
+
 
 # send
 
