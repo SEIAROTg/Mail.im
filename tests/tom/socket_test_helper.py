@@ -7,7 +7,7 @@ from imapclient import SEEN
 from imapclient.response_types import Envelope, Address
 from faker import Faker
 from src.tom import Mailbox, Credential, Endpoint, Socket
-from src.tom.packet import Packet
+from src.tom.mailbox._packet import Packet
 
 
 class SocketTestHelper:
@@ -43,7 +43,7 @@ class SocketTestHelper:
         self.__faker = Faker()
         self.__messages = {}
         self.__send_queue = deque()
-        self.mock_config = patch.dict('src.tom.mailbox.config', self.__config_stub).start()
+        self.mock_config = patch.dict('src.config.config', self.__config_stub).start()
         self.mock_store = MagicMock()
         self.mock_store.search.side_effect = self.__search_stub
         self.mock_store.fetch.side_effect = self.__fetch_stub
@@ -52,9 +52,11 @@ class SocketTestHelper:
         self.mock_listener.idle_check.side_effect = self.__idle_check_stub
         self.mock_transport = patch('smtplib.SMTP').start()
         self.mock_transport.return_value.sendmail.side_effect = self.__sendmail_stub
-        self.mock_packet = patch('src.tom.mailbox.Packet').start()
+        self.mock_packet = MagicMock()
         self.mock_packet.from_message.side_effect = lambda x: x
         self.mock_packet.side_effect = lambda *args: Mock(to_message=lambda: Mock(as_bytes=lambda: Packet(*args)))
+        patch('src.tom.mailbox._mailbox_listener.Packet', self.mock_packet).start()
+        patch('src.tom.mailbox._mailbox_tasks.Packet', self.mock_packet).start()
         self.__mock_imapclient = patch('imapclient.IMAPClient').start()
         self.__mock_imapclient.side_effect = [self.mock_store, self.mock_listener]
         self.__mock_message_from_bytes = patch('email.message_from_bytes').start()
@@ -70,7 +72,7 @@ class SocketTestHelper:
     def close(self):
         with self.__cv_listen:
             self.__closed = True
-            self.__cv_listen.notifyAll()
+            self.__cv_listen.notify_all()
         self.__mailbox.close()
         self.__thread_mailbox.join()
 

@@ -2,7 +2,7 @@ import email
 import pytest
 from faker import Faker
 from src.tom import Endpoint
-from src.tom.packet import Packet
+from src.tom.mailbox._packet import Packet
 from src.config import config
 
 

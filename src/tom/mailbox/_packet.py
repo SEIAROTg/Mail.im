@@ -6,8 +6,8 @@ from email.utils import parseaddr, formataddr
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from dataclasses import dataclass
-from . import Endpoint
-from ..config import config
+from .. import Endpoint
+import src.config
 
 
 @dataclass()
@@ -21,7 +21,7 @@ class Packet:
 
     @staticmethod
     def from_message(msg: email.message.Message) -> Packet:
-        if msg.get('X-Mailer') != config['tom']['X-Mailer']:
+        if msg.get('X-Mailer') != src.config.config['tom']['X-Mailer']:
             raise Exception('invalid packet: invalid X-Mailer header')
         from_ = Endpoint(*reversed(parseaddr(msg.get('From'))))
         to = Endpoint(*reversed(parseaddr(msg.get('To'))))
@@ -54,7 +54,7 @@ class Packet:
         payload = MIMEApplication(self.payload, 'mailim-payload', email.encoders.encode_7or8bit)
         body.attach(acks)
         body.attach(payload)
-        body.add_header('X-Mailer', config['tom']['X-Mailer'])
+        body.add_header('X-Mailer', src.config.config['tom']['X-Mailer'])
         body.add_header('Subject', '-'.join(map(str, (self.seq, self.attempt))))
         body.add_header('From', formataddr((self.from_.port, self.from_.address)))
         body.add_header('To', formataddr((self.to.port, self.to.address)))

@@ -6,7 +6,7 @@ import pytest
 from faker import Faker
 from src.tom import Endpoint, Mailbox, Socket
 from .socket_test_helper import SocketTestHelper
-from src.tom.packet import Packet
+from src.tom.mailbox._packet import Packet
 
 
 @pytest.fixture()
