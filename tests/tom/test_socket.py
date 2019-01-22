@@ -75,10 +75,11 @@ def test_accept(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     listening_socket = helper.create_listening_socket(endpoints[1])
 
-    helper.feed_messages({faker.pyint(): Packet(*endpoints, 0, 0, set(), payload)})
+    thread = helper.defer(lambda: helper.feed_messages({faker.pyint(): Packet(*endpoints, 0, 0, set(), payload)}), 0.5)
     socket = listening_socket.accept()
     data = socket.recv(111)
     assert data == payload
+    thread.join()
 
 
 @pytest.mark.timeout(5)
@@ -220,12 +221,13 @@ def test_recv(faker: Faker, helper: SocketTestHelper):
     }
     socket = helper.create_connected_socket(*endpoints)
 
-    helper.feed_messages(messages)
+    thread = helper.defer(lambda: helper.feed_messages(messages), 0.5)
     ret = socket.recv(len(payload))
     socket.close()
 
     assert ret == payload
     helper.mock_store.add_flags.assert_called_once_with([uid], [imapclient.SEEN])
+    thread.join()
 
 
 @pytest.mark.timeout(5)
