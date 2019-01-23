@@ -1,5 +1,5 @@
-from typing import Dict, Tuple, Deque, Optional, Callable, Any
-from unittest.mock import patch, MagicMock, Mock
+from typing import Dict, Tuple, Deque, Optional, Callable, Any, List
+from unittest.mock import patch, MagicMock, Mock, _patch
 from collections import deque
 import time
 import threading
@@ -26,6 +26,7 @@ class SocketTestHelper:
     mock_transport: MagicMock
     __mock_imapclient: MagicMock
     __mock_message_from_bytes: MagicMock
+    __patches: List[_patch]
     __mailbox: Mailbox
 
     __config_stub = {
@@ -43,25 +44,38 @@ class SocketTestHelper:
         self.__faker = Faker()
         self.__messages = {}
         self.__send_queue = deque()
-        self.mock_config = patch.dict('src.config.config', self.__config_stub).start()
+        patch_config = patch.dict('src.config.config', self.__config_stub)
+        self.mock_config = patch_config.start()
         self.mock_store = MagicMock()
         self.mock_store.search.side_effect = self.__search_stub
         self.mock_store.fetch.side_effect = self.__fetch_stub
         self.mock_store.add_flags.side_effect = self.__add_flags_stub
         self.mock_listener = MagicMock()
         self.mock_listener.idle_check.side_effect = self.__idle_check_stub
-        self.mock_transport = patch('smtplib.SMTP').start()
+        patch_transport = patch('smtplib.SMTP')
+        self.mock_transport = patch_transport.start()
         self.mock_transport.return_value.sendmail.side_effect = self.__sendmail_stub
         self.mock_packet = MagicMock()
         self.mock_packet.from_message.side_effect = lambda x: x
         self.mock_packet.side_effect = lambda *args: Mock(to_message=lambda: Mock(as_bytes=lambda: Packet(*args)))
-        patch('src.tom.mailbox._mailbox_listener.Packet', self.mock_packet).start()
-        patch('src.tom.mailbox._mailbox_tasks.Packet', self.mock_packet).start()
-        self.__mock_imapclient = patch('imapclient.IMAPClient').start()
+        patch_packet0 = patch('src.tom.mailbox._mailbox_listener.Packet', self.mock_packet)
+        patch_packet1 = patch('src.tom.mailbox._mailbox_tasks.Packet', self.mock_packet)
+        patch_packet0.start()
+        patch_packet1.start()
+        patch_imapclient = patch('imapclient.IMAPClient')
+        self.__mock_imapclient = patch_imapclient.start()
         self.__mock_imapclient.side_effect = [self.mock_store, self.mock_listener]
-        self.__mock_message_from_bytes = patch('email.message_from_bytes').start()
+        patch_message_from_bytes = patch('email.message_from_bytes')
+        self.__mock_message_from_bytes = patch_message_from_bytes.start()
         self.__mock_message_from_bytes.side_effect = lambda x: x
         self.__mailbox = Mailbox(self.__fake_credential(), self.__fake_credential())
+        self.__patches = [
+            patch_config,
+            patch_transport,
+            patch_packet0,
+            patch_packet1,
+            patch_imapclient,
+            patch_message_from_bytes]
 
         self.__thread_mailbox = threading.Thread(target=self.__mailbox.join)
         self.__thread_mailbox.start()
@@ -75,6 +89,9 @@ class SocketTestHelper:
             self.__cv_listen.notify_all()
         self.__mailbox.close()
         self.__thread_mailbox.join()
+        for patch in self.__patches:
+            patch.stop()
+        self.__patches = []
 
     def create_connected_socket(
             self,
