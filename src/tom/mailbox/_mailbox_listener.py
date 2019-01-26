@@ -92,6 +92,8 @@ class MailboxListener(MailboxTasks):
                             self._schedule_task(
                                 src.config.config['tom']['ATO'] / 1000,
                                 functools.partial(self._task_send_ack, sid, context.next_seq))
+                            if packet.payload:
+                                self._socket_update_ready_status(sid, 'read', True)
                             context.cv.notify_all()
                     seen = True
                     continue
@@ -111,6 +113,7 @@ class MailboxListener(MailboxTasks):
                             context.sockets[conn_sid] = conn_context
                             context.connected_sockets[(local_endpoint, remote_endpoint)] = conn_sid
                             context.queue.append(conn_sid)
+                            self._socket_update_ready_status(sid, 'read', True)
                             context.cv.notify_all()
                         conn_context.pending_remote[packet.seq] = packet.payload
                         conn_context.to_ack.add((packet.seq, packet.attempt))

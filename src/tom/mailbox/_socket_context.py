@@ -6,6 +6,10 @@ from .. import Endpoint
 
 class SocketContext:
     closed: bool = False
+    mutex: threading.RLock
+
+    def __init__(self):
+        self.mutex = threading.RLock()
 
 
 class Created(SocketContext):
@@ -16,10 +20,21 @@ class Waitable(SocketContext):
     cv: threading.Condition
 
     def __init__(self):
-        self.cv = threading.Condition()
+        super().__init__()
+        self.cv = threading.Condition(self.mutex)
 
 
-class Connected(Waitable):
+class Epollable(SocketContext):
+    repolls: Set[int]
+    xepolls: Set[int]
+
+    def __init__(self):
+        super().__init__()
+        self.repolls = set()
+        self.xepolls = set()
+
+
+class Connected(Waitable, Epollable):
     local_endpoint: Endpoint
     remote_endpoint: Endpoint
     next_seq: int = 0
@@ -41,7 +56,7 @@ class Connected(Waitable):
         self.to_ack = set()
 
 
-class Listening(Waitable):
+class Listening(Waitable, Epollable):
     local_endpoint: Endpoint
     queue: Deque[int]                                           # [sid]
     connected_sockets: Dict[Tuple[Endpoint, Endpoint], int]     # (local_endpoint, remote_endpoint) -> sid

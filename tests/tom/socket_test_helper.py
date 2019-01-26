@@ -6,7 +6,7 @@ import threading
 from imapclient import SEEN
 from imapclient.response_types import Envelope, Address
 from faker import Faker
-from src.tom import Mailbox, Credential, Endpoint, Socket
+from src.tom import Mailbox, Credential, Endpoint, Socket, Epoll
 from src.tom.mailbox._packet import Packet
 
 
@@ -108,6 +108,9 @@ class SocketTestHelper:
         local_endpoint = local_endpoint or self.fake_endpoint()
         socket.listen(local_endpoint)
         return socket
+
+    def create_epoll(self) -> Epoll:
+        return Epoll(self.__mailbox)
 
     def feed_messages(self, messages: Dict[int, Packet]):
         assert messages, 'feeding no messages'

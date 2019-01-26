@@ -1,9 +1,10 @@
 from ..credential import Credential
 from ._mailbox_listener import MailboxListener
 from ._mailbox_socket_interface import MailboxSocketInterface
+from ._mailbox_epoll_interface import MailboxEpollInterface
 
 
-class Mailbox(MailboxListener, MailboxSocketInterface):
+class Mailbox(MailboxListener, MailboxSocketInterface, MailboxEpollInterface):
     def __init__(self, smtp: Credential, imap: Credential):
         super().__init__(smtp=smtp, imap=imap)
 
