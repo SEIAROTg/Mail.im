@@ -26,7 +26,7 @@ class Packet:
         from_ = Endpoint(*reversed(parseaddr(msg.get('From'))))
         to = Endpoint(*reversed(parseaddr(msg.get('To'))))
         try:
-            seq, attempt = msg.get('Subject').split('-')
+            seq, attempt = msg.get('Subject').rsplit('-', 1)
             seq = int(seq)
             attempt = int(attempt)
         except ValueError or AttributeError:
