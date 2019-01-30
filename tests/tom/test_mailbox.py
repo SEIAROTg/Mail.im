@@ -15,7 +15,7 @@ def test_mailbox(IMAPClient: MagicMock, SMTP: MagicMock, faker: Faker):
     listener = MagicMock()
 
     IMAPClient.side_effect = [store, listener]
-    listener.idle_check.side_effect = OSError('no idle check in test')
+    listener.idle_check.return_value = None  # skip idle check in tests
 
     mailbox = Mailbox(smtp, imap)
 
