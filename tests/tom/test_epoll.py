@@ -95,7 +95,7 @@ def test_read_recv_order(faker: Faker, helper: SocketTestHelper):
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 1, 0, set(), payload),
     }), 0.5)
-    rrset, rxset = epoll.wait(timeout=0)
+    rrset, rxset = epoll.wait(timeout=0.5)
 
     assert not rrset
     assert not rxset

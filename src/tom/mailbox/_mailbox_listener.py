@@ -92,7 +92,7 @@ class MailboxListener(MailboxTasks):
                             self._schedule_task(
                                 src.config.config['tom']['ATO'] / 1000,
                                 functools.partial(self._task_send_ack, sid, context.next_seq))
-                            if packet.payload:
+                            if packet.payload and packet.seq == context.recv_cursor[0]:
                                 self._socket_update_ready_status(sid, 'read', True)
                             context.cv.notify_all()
                     seen = True
