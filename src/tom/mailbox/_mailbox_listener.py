@@ -1,25 +1,27 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import functools
 import email
+import os
 import threading
-import imapclient
 import imapclient.response_types
 from ._mailbox_tasks import MailboxTasks
 from ._packet import Packet
-from ..endpoint import Endpoint
 from ..credential import Credential
-from . import _socket_context
+from . import _socket_context, _imapclient
 import src.config
 
 
 class MailboxListener(MailboxTasks):
-    __store: imapclient.IMAPClient
-    __listener: imapclient.IMAPClient
+    __store: _imapclient.IMAPClient
+    __listener: _imapclient.IMAPClient
+    __mutex_listener: threading.RLock
+    __selfpipe: Tuple[int, int]
     __thread_listener: threading.Thread
+    __closed: bool = False
 
     @staticmethod
-    def __init_imap(credential: Credential) -> imapclient.IMAPClient:
-        imap = imapclient.IMAPClient(credential.host, credential.port, ssl=True, use_uid=True)
+    def __init_imap(credential: Credential) -> _imapclient.IMAPClient:
+        imap = _imapclient.IMAPClient(credential.host, credential.port, ssl=True, use_uid=True)
         imap.login(credential.username, credential.password)
         imap.select_folder('INBOX')
         return imap
@@ -28,6 +30,8 @@ class MailboxListener(MailboxTasks):
         super().__init__(**kwargs)
         self.__store = self.__init_imap(imap)
         self.__listener = self.__init_imap(imap)
+        self.__mutex_listener = threading.RLock()
+        self.__selfpipe = os.pipe()
         self.__thread_listener = threading.Thread(target=self.__listen)
         self.__thread_listener.start()
 
@@ -36,23 +40,29 @@ class MailboxListener(MailboxTasks):
         self.__thread_listener.join()
 
     def close(self):
+        with self._mutex:
+            if self.__closed:
+                return
+            self.__closed = True
         super().close()
-        self.__store.logout()
-        self.__listener.idle_done()
-        self.__listener.logout()
+        os.close(self.__selfpipe[1])
+        with self.__mutex_listener:
+            self.__store.logout()
+            self.__listener.logout()
         self.join()
 
     def __listen(self):
-        self.__listener.idle()
-        self.__check_new_packets()
-        while True:
-            try:
-                responses = self.__listener.idle_check()
-            except OSError:
-                # disconnected from IMAP
-                return
-            if any(response[1] == b'EXISTS' for response in responses):
-                self.__check_new_packets()
+        with self.__mutex_listener:
+            self.__listener.idle()
+            self.__check_new_packets()
+            while True:
+                responses = self.__listener.idle_check(selfpipe=self.__selfpipe[0])
+                if responses is None:  # selfpipe triggered
+                    self.__listener.idle_done()
+                    return
+                if any(response[1] == b'EXISTS' for response in responses):
+                    self.__check_new_packets()
+            # TODO: handle exception
 
     def __check_new_packets(self):
         uids = self.__store.search('UNSEEN')

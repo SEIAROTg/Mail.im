@@ -62,7 +62,7 @@ class SocketTestHelper:
         patch_packet1 = patch('src.tom.mailbox._mailbox_tasks.Packet', self.mock_packet)
         patch_packet0.start()
         patch_packet1.start()
-        patch_imapclient = patch('imapclient.IMAPClient')
+        patch_imapclient = patch('src.tom.mailbox._imapclient.IMAPClient')
         self.__mock_imapclient = patch_imapclient.start()
         self.__mock_imapclient.side_effect = [self.mock_store, self.mock_listener]
         patch_message_from_bytes = patch('email.message_from_bytes')
@@ -149,11 +149,11 @@ class SocketTestHelper:
             self.__send_queue.append(packet)
         self.__sem_send.release()
 
-    def __idle_check_stub(self):
+    def __idle_check_stub(self, timeout=None, selfpipe=None):
         with self.__cv_listen:
             while True:
                 if self.__closed:
-                    raise OSError('quit')
+                    return
                 self.__cv_listen.wait()
                 if self.__messages:
                     return [(len(self.__messages), b'EXISTS')]
