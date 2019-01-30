@@ -50,8 +50,8 @@ class Packet:
     def to_message(self: Packet) -> email.message.Message:
         body = MIMEMultipart()
         serialized_acks = '|'.join('-'.join(map(str, ack)) for ack in self.acks)
-        acks = MIMEApplication(serialized_acks, 'mailim-acks', email.encoders.encode_noop)
-        payload = MIMEApplication(self.payload, 'mailim-payload', email.encoders.encode_7or8bit)
+        acks = MIMEApplication(serialized_acks, 'x-mailim-acks', email.encoders.encode_noop)
+        payload = MIMEApplication(self.payload, 'x-mailim-payload', email.encoders.encode_base64)
         body.attach(acks)
         body.attach(payload)
         body.add_header('X-Mailer', src.config.config['tom']['X-Mailer'])

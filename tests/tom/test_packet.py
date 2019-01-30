@@ -86,9 +86,9 @@ def test_to_message(faker: Faker):
     assert msg.get('Subject') == '-'.join(map(str, (seq, attempt)))
     assert msg.get('X-Mailer') == config['tom']['X-Mailer']
     assert len(msg.get_payload()) == 2
-    assert msg.get_payload()[0].get('Content-Type') == 'application/mailim-acks'
+    assert msg.get_payload()[0].get('Content-Type') == 'application/x-mailim-acks'
     assert msg.get_payload()[0].get_payload() == '|'.join('-'.join(map(str, ack)) for ack in acks)
-    assert msg.get_payload()[1].get('Content-Type') == 'application/mailim-payload'
+    assert msg.get_payload()[1].get('Content-Type') == 'application/x-mailim-payload'
     assert msg.get_payload()[1].get_payload(decode=True) == payload
 
 
@@ -98,3 +98,15 @@ def test_negative_seq(faker: Faker):
     packet = Packet(from_, to, -1, 0, {(0, 0)}, b'')
     recovered_packet = Packet.from_message(packet.to_message())
     assert recovered_packet.seq == -1
+
+
+def test_line_ending(faker: Faker):
+    from_ = Endpoint(faker.email(), faker.uuid4())
+    to = Endpoint(faker.email(), faker.uuid4())
+    payload = b'abc\r123\ndef\r\n456\n\rxyz'
+    packet = Packet(from_, to, 0, 0, set(), payload)
+    msg = packet.to_message()
+    bytes_ = msg.as_bytes()
+    recovered_msg = email.message_from_bytes(bytes_)
+    recovered_packet = Packet.from_message(recovered_msg)
+    assert recovered_packet.payload == payload
