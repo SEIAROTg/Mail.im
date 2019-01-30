@@ -6,11 +6,6 @@ from src.tom.mailbox._packet import Packet
 from src.config import config
 
 
-@pytest.fixture()
-def faker() -> Faker:
-    return Faker()
-
-
 def make_msg_txt(
         from_=b'port A <foo@bar.com>',
         to=b'port B <bar@foo.com>',

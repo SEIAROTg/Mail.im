@@ -65,6 +65,7 @@ class MailboxListener(MailboxTasks):
             # TODO: handle exception
 
     def __check_new_packets(self):
+        self.__store.noop()
         uids = self.__store.search('UNSEEN')
         messages = self.__store.fetch(uids, ['BODY.PEEK[]'])
         seens = []

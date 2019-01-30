@@ -4,15 +4,10 @@ from faker import Faker
 from src.tom import Credential, Mailbox
 
 
-@pytest.fixture()
-def faker():
-    return Faker()
-
-
 @pytest.mark.timeout(5)
 @patch('smtplib.SMTP')
-@patch('imapclient.IMAPClient')
-def test_mailbox(IMAPClient, SMTP, faker):
+@patch('src.tom.mailbox._imapclient.IMAPClient')
+def test_mailbox(IMAPClient: MagicMock, SMTP: MagicMock, faker: Faker):
     smtp = Credential(host=faker.hostname(), port=faker.pyint(), username=faker.email(), password=faker.password())
     imap = Credential(host=faker.hostname(), port=faker.pyint(), username=faker.email(), password=faker.password())
 

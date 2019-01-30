@@ -6,11 +6,6 @@ from src.tom.mailbox._packet import Packet
 
 
 @pytest.fixture()
-def faker() -> Faker:
-    return Faker()
-
-
-@pytest.fixture()
 def helper() -> SocketTestHelper:
     helper = SocketTestHelper()
     yield helper
