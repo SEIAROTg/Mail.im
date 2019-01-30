@@ -74,7 +74,7 @@ class MailboxSocketInterface(MailboxTasks):
             self._connected_sockets[(conn_context.local_endpoint, conn_context.remote_endpoint)] = conn_sid
             self._schedule_task(
                 src.config.config['tom']['ATO'] / 1000,
-                functools.partial(self._task_send_ack, conn_sid, conn_context.next_seq))
+                functools.partial(self._task_send_ack, conn_context, conn_context.next_seq))
             return conn_sid
 
     def socket_send(self, sid: int, buf: bytes) -> int:
@@ -83,7 +83,7 @@ class MailboxSocketInterface(MailboxTasks):
             seq = context.next_seq
             context.next_seq += 1
             context.pending_local[seq] = buf
-            self._task_transmit(sid, seq)
+            self._task_transmit(context, seq)
         return len(buf)
 
     def socket_recv(self, sid: int, size: int, timeout: Optional[float] = None) -> bytes:

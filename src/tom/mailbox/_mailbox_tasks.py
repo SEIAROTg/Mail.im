@@ -44,31 +44,33 @@ class MailboxTasks(MailboxBase):
         self.__transport.close()
 
     def __timer(self):
-        with self.__cv_timer:
-            while not self.__closed:
-                if self.__scheduled_tasks:
-                    scheduled_time, task = self.__scheduled_tasks[0]
-                    now = time.time()
-                    if scheduled_time <= now:
-                        heapq.heappop(self.__scheduled_tasks)
-                        try:
-                            task()
-                        except Exception:
-                            # TODO: exception handling for scheduled tasks
-                            pass
+        while True:
+            with self.__cv_timer:
+                if self.__closed:
+                   break
+                while not self.__closed and (not self.__scheduled_tasks or self.__scheduled_tasks[0][0] > time.time()):
+                    if self.__scheduled_tasks:
+                        self.__cv_timer.wait(self.__scheduled_tasks[0][0] - time.time())
                     else:
-                        self.__cv_timer.wait(scheduled_time - now)
-                else:
-                    self.__cv_timer.wait()
+                        self.__cv_timer.wait()
+                if self.__closed:
+                    break
+                _, task = heapq.heappop(self.__scheduled_tasks)
+            try:
+                task()
+            except Exception:
+                # TODO: exception handling for scheduled tasks
+                pass
 
     def _schedule_task(self, delay: float, task: Callable):
         with self.__cv_timer:
             heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
             self.__cv_timer.notify_all()
 
-    def _task_transmit(self, sid: int, seq: int):
-        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+    def _task_transmit(self, context: _socket_context.Connected, seq: int):
         with context.cv:
+            if context.closed:
+                return
             acks = set(context.to_ack)
             local_endpoint, remote_endpoint = context.local_endpoint, context.remote_endpoint
             if seq == -1:
@@ -91,13 +93,12 @@ class MailboxTasks(MailboxBase):
         with self._mutex:
             self.__transport.sendmail(local_endpoint.address, remote_endpoint.address, msg.as_bytes())
         if seq != -1:  # do not retransmit pure acks
-            self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, sid, seq))
+            self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, context, seq))
 
-    def _task_send_ack(self, sid: int, next_seq: int):
-        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+    def _task_send_ack(self, context: _socket_context.Connected, next_seq: int):
         with context.cv:
-            if context.next_seq != next_seq:
+            if context.closed or context.next_seq != next_seq:
                 # another packet carrying ack has been sent
                 return
         # pure ack does not consume seq number
-        self._task_transmit(sid, -1)
+        self._task_transmit(context, -1)
