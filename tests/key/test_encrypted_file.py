@@ -89,3 +89,15 @@ def test_load_dump(faker: Faker):
     decrypted_data = EncryptedFile.load(master_key, stream)
 
     assert decrypted_data == data
+
+
+def test_load_dump_incorrect_key(faker: Faker):
+    master_key = faker.binary(16)
+    data = faker.binary(100)
+    stream = io.BytesIO()
+
+    EncryptedFile.dump(master_key, data, stream)
+    stream = io.BytesIO(stream.getvalue())
+    with pytest.raises(ValueError) as execinfo:
+        EncryptedFile.load(b'!' + master_key, stream)
+    assert execinfo.match('MAC check failed')
