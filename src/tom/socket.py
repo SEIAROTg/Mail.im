@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 from typing import Optional, List, Tuple
 from . import Mailbox, Endpoint
 
@@ -38,8 +39,19 @@ class Socket:
     def send(self, buf: bytes) -> int:
         return self.__mailbox.socket_send(self.__id, buf)
 
-    def recv(self, size: int, timeout: Optional[float] = None) -> bytes:
-        return self.__mailbox.socket_recv(self.__id, size, timeout)
+    def recv(self, max_size: int, timeout: Optional[float] = None) -> bytes:
+        return self.__mailbox.socket_recv(self.__id, max_size, timeout)
+
+    def recv_exact(self, size: int, timeout: Optional[float] = None) -> bytes:
+        ret = b''
+        while size and (timeout is None or timeout > 0):
+            start = time.time()
+            seg = self.__mailbox.socket_recv(self.__id, size, timeout)
+            ret += seg
+            size -= len(seg)
+            if timeout is not None:
+                timeout -= time.time() - start
+        return ret
 
     @property
     def mailbox(self) -> Mailbox:

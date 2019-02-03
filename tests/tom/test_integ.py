@@ -47,11 +47,11 @@ def test_mutual_connect(faker: Faker, smtp: Credential, imap: Credential):
     for i in range(0, 10, 2):
         socket0.send(payloads[i])
         print('packet {}: sent'.format(i))
-        assert socket1.recv(len(payloads[i])) == payloads[i]
+        assert socket1.recv_exact(len(payloads[i])) == payloads[i]
         print('packet {}: received'.format(i))
         socket1.send(payloads[i + 1])
         print('packet {}: sent'.format(i + 1))
-        assert socket0.recv(len(payloads[i + 1])) == payloads[i + 1]
+        assert socket0.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
         print('packet {}: received'.format(i + 1))
     mailbox.close()
 
@@ -74,10 +74,10 @@ def test_listen(faker: Faker, smtp: Credential, imap: Credential):
         if i != 0:
             socket0.send(payloads[i])
         print('packet {}: sent'.format(i))
-        assert socket1.recv(len(payloads[i])) == payloads[i]
+        assert socket1.recv_exact(len(payloads[i])) == payloads[i]
         print('packet {}: received'.format(i))
         socket1.send(payloads[i + 1])
         print('packet {}: sent'.format(i + 1))
-        assert socket0.recv(len(payloads[i + 1])) == payloads[i + 1]
+        assert socket0.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
         print('packet {}: received'.format(i + 1))
     mailbox.close()

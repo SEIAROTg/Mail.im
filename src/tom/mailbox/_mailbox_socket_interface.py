@@ -86,33 +86,37 @@ class MailboxSocketInterface(MailboxTasks):
             self._task_transmit(context, seq)
         return len(buf)
 
-    def socket_recv(self, sid: int, size: int, timeout: Optional[float] = None) -> bytes:
+    def socket_recv(self, sid: int, max_size: int, timeout: Optional[float] = None) -> bytes:
         context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
-        ret = b''
         with context.cv:
-            while not context.closed and size > 0 and (timeout is None or timeout > 0):
-                seq, off = context.recv_cursor
+            while (
+                    not context.closed
+                    and context.pending_remote.get(context.recv_cursor[0]) is None
+                    and (timeout is None or timeout > 0)):
+                start = time.time()
+                context.cv.wait(timeout)
+                if timeout:
+                    timeout -= time.time() - start
+            ret = b''
+            seq, off = context.recv_cursor
+            payload = context.pending_remote.get(seq)
+            while payload is not None and max_size:
+                seg = payload[off:off+max_size]
+                ret += seg
+                max_size -= len(seg)
+                off += len(seg)
+                if off >= len(payload):
+                    del context.pending_remote[seq]
+                    seq += 1
+                    off = 0
+                context.recv_cursor = (seq, off)
                 payload = context.pending_remote.get(seq)
-                if payload is not None:
-                    seg = payload[off:off + size]
-                    ret += seg
-                    size -= len(seg)
-                    if off + len(seg) >= len(payload):
-                        context.recv_cursor = (seq + 1, 0)
-                        del context.pending_remote[seq]
-                    else:
-                        context.recv_cursor = (seq, off + len(seg))
-                else:
-                    start = time.time()
-                    context.cv.wait(timeout)
-                    if not timeout is None:
-                        timeout -= time.time() - start
             if context.closed and not ret:
                 raise Exception('socket already closed')
-            next_payload = context.pending_remote.get(context.recv_cursor[0])
-            while next_payload == b'':
-                context.recv_cursor = (context.recv_cursor[0] + 1, context.recv_cursor[1])
-                next_payload = context.pending_remote.get(context.recv_cursor[0])
-            if next_payload is None:
+            while payload == b'':
+                seq += 1
+                context.recv_cursor = (seq, off)
+                payload = context.pending_remote.get(seq)
+            if payload is None:
                 self._socket_update_ready_status(sid, 'read', False)
             return ret

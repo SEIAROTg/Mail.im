@@ -1,3 +1,5 @@
+import time
+from unittest.mock import call
 import imapclient
 import pytest
 from faker import Faker
@@ -72,7 +74,7 @@ def test_accept(faker: Faker, helper: SocketTestHelper):
 
     thread = helper.defer(lambda: helper.feed_messages({faker.pyint(): Packet(*endpoints, 0, 0, set(), payload)}), 0.5)
     socket = listening_socket.accept()
-    data = socket.recv(111)
+    data = socket.recv_exact(111)
     assert data == payload
     thread.join()
 
@@ -88,7 +90,7 @@ def test_accept_multiple(faker: Faker, helper: SocketTestHelper):
     })
     for i in range(3):
         socket = listening_socket.accept()
-        data = socket.recv(111)
+        data = socket.recv_exact(111)
         assert data == payloads[i]
 
 
@@ -104,7 +106,7 @@ def test_accept_multiple_sockets(faker: Faker, helper: SocketTestHelper):
 
     for i in range(3):
         socket = listening_sockets[i].accept()
-        data = socket.recv(111)
+        data = socket.recv_exact(111)
         assert data == payloads[i]
 
 
@@ -124,7 +126,7 @@ def test_accept_defer_ack(faker: Faker, helper: SocketTestHelper):
     helper.assert_not_sent(Packet(*endpoints, -1, 0, {(0, 0)}, b''), 1.5)
     socket = listening_sockets.accept()
     helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0)}, b''), 1.5, 0.5)
-    data = socket.recv(111)
+    data = socket.recv_exact(111)
     assert data == payload
 
 
@@ -148,7 +150,7 @@ def test_close_unblock_recv(helper: SocketTestHelper):
     socket = helper.create_connected_socket()
     thread = helper.defer(socket.close, 0.2)
     with pytest.raises(Exception) as execinfo:
-        socket.recv(100)
+        socket.recv_exact(100)
     assert execinfo.match('already closed')
     thread.join()
 
@@ -205,7 +207,6 @@ def test_send_no_retransmit_after_pure_ack(faker: Faker, helper: SocketTestHelpe
 
 # recv
 
-
 @pytest.mark.timeout(5)
 def test_recv(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
@@ -226,6 +227,24 @@ def test_recv(faker: Faker, helper: SocketTestHelper):
 
 
 @pytest.mark.timeout(5)
+def test_recv_not_block(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payload = faker.binary(111)
+    uid = faker.pyint()
+    messages = {
+        uid: Packet(*reversed(endpoints), 0, 0, set(), payload),
+    }
+    socket = helper.create_connected_socket(*endpoints)
+
+    helper.feed_messages(messages)
+    ret = socket.recv(len(payload) * 10)
+    socket.close()
+
+    assert ret == payload
+    helper.mock_store.add_flags.assert_called_once_with([uid], [imapclient.SEEN])
+
+
+@pytest.mark.timeout(5)
 def test_recv_multiple_packets(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
@@ -236,7 +255,49 @@ def test_recv_multiple_packets(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_connected_socket(*endpoints)
 
     helper.feed_messages(messages)
+    time.sleep(0.5)
     ret = socket.recv(195)
+    socket.close()
+
+    assert ret == b''.join(payloads)[:195]
+    helper.mock_store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
+
+
+@pytest.mark.timeout(5)
+def test_recv_exact(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payloads = [faker.binary(111) for _ in range(2)]
+    uid = faker.pyint()
+    messagess = [
+        {uid + i: Packet(*reversed(endpoints), i, 0, set(), payloads[i])} for i in range(2)
+    ]
+    socket = helper.create_connected_socket(*endpoints)
+
+    thread0 = helper.defer(lambda: helper.feed_messages(messagess[0]), 0.5)
+    thread1 = helper.defer(lambda: helper.feed_messages(messagess[1]), 1)
+    ret = socket.recv_exact(sum(map(len, payloads)))
+    socket.close()
+
+    assert ret == b''.join(payloads)
+    helper.mock_store.add_flags.assert_has_calls([
+        call([uid + i], [imapclient.SEEN]) for i in range(2)
+    ])
+    thread0.join()
+    thread1.join()
+
+
+@pytest.mark.timeout(5)
+def test_recv_exact_multiple_packets(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
+    uids = faker.pylist(3, False, int)
+    messages = {
+        uids[i]: Packet(*reversed(endpoints), i, 0, set(), payloads[i]) for i in range(3)
+    }
+    socket = helper.create_connected_socket(*endpoints)
+
+    helper.feed_messages(messages)
+    ret = socket.recv_exact(195)
     socket.close()
 
     assert ret == b''.join(payloads)[:195]
@@ -258,8 +319,8 @@ def test_recv_multiple_sockets(faker: Faker, helper: SocketTestHelper):
     socket2 = helper.create_connected_socket(*endpoints2)
 
     helper.feed_messages(messages)
-    ret1 = socket1.recv(111 + 53)
-    ret2 = socket2.recv(36 + 1 + 71)
+    ret1 = socket1.recv_exact(111 + 53)
+    ret2 = socket2.recv_exact(36 + 1 + 71)
     socket1.close()
     socket2.close()
 
@@ -311,7 +372,7 @@ def test_recv_order(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_connected_socket(*endpoints)
 
     helper.feed_messages(messages)
-    ret = socket.recv(218)
+    ret = socket.recv_exact(218)
     socket.close()
 
     assert ret == payloads[1] + payloads[2] + payloads[0]
