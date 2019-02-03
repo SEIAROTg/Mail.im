@@ -8,7 +8,7 @@ class EncryptedFile:
     __ARGON2_TIME_COST: int = 16
     __ARGON2_MEMORY_COST: int = 102400
     __ARGON2_PARALLELISM: int = 8
-    __ARGON2_HASH_LEN: int = 16
+    __ARGON2_HASH_LEN: int = 32
     __ARGON2_SALT_LEN: int = 16
     __ARGON2_TYPE: argon2.low_level.Type = argon2.low_level.Type.ID
     __ARGON2_VERSION: int = 19

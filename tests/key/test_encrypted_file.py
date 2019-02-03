@@ -37,7 +37,7 @@ def test_dump(
     salt = faker.binary(16)
     master_key = faker.binary(16)
     data = faker.binary(100)
-    hashed_key = faker.binary(16)
+    hashed_key = faker.binary(32)
     ciphertext = faker.binary(16)
     nonce = faker.binary(16)
     tag = faker.binary(16)
@@ -50,7 +50,7 @@ def test_dump(
     EncryptedFile.dump(master_key, data, stream)
 
     mock_get_random_bytes.assert_called_once_with(16)
-    mock_hash_secret_raw.assert_called_once_with(master_key, salt, 16, 102400, 8, 16, argon2.low_level.Type.ID, 19)
+    mock_hash_secret_raw.assert_called_once_with(master_key, salt, 16, 102400, 8, 32, argon2.low_level.Type.ID, 19)
     mock_aes.new.assert_called_once_with(hashed_key, mock_aes.MODE_GCM)
     mock_aes.new.return_value.encrypt_and_digest.assert_called_once_with(data)
     assert stream.getvalue() == salt + nonce + tag + ciphertext
@@ -63,7 +63,7 @@ def test_load(
     salt = faker.binary(16)
     master_key = faker.binary(16)
     data = faker.binary(100)
-    hashed_key = faker.binary(16)
+    hashed_key = faker.binary(32)
     ciphertext = faker.binary(16)
     nonce = faker.binary(16)
     tag = faker.binary(16)
@@ -73,7 +73,7 @@ def test_load(
 
     decrypted_data = EncryptedFile.load(master_key, stream)
 
-    mock_hash_secret_raw.assert_called_once_with(master_key, salt, 16, 102400, 8, 16, argon2.low_level.Type.ID, 19)
+    mock_hash_secret_raw.assert_called_once_with(master_key, salt, 16, 102400, 8, 32, argon2.low_level.Type.ID, 19)
     mock_aes.new.assert_called_once_with(hashed_key, mock_aes.MODE_GCM, nonce)
     mock_aes.new.return_value.decrypt_and_verify.assert_called_once_with(ciphertext, tag)
     assert decrypted_data == data
