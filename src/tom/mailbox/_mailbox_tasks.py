@@ -63,11 +63,30 @@ class MailboxTasks(MailboxBase):
                 pass
 
     def _schedule_task(self, delay: float, task: Callable):
+        """
+        Schedule a new task.
+
+        :param delay: the scheduled time to execute in seconds, counting from current time.
+        :param task: the function to execute.
+        """
         with self.__cv_timer:
             heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
             self.__cv_timer.notify_all()
 
     def _task_transmit(self, context: _socket_context.Connected, seq: int):
+        """
+        Task body for transmitting a packet.
+
+        This will initiate a new transmission attempt of the specified seq number and schedule a timeout retransmission,
+        with some exceptions:
+        1. If the socket has been closed, no actions will be taken.
+        2. If the specified seq number has been ACKed from the remote, no actions will be taken.
+        3. If a pure ACK is executed but there is no packet to ACK, no actions will be taken.
+        4. If a pure ACK is executed, no retransmission will be scheduled.
+
+        :param context: a connected socket context.
+        :param seq: seq number of the packet to transmit.
+        """
         with context.cv:
             if context.closed:
                 return
@@ -96,6 +115,15 @@ class MailboxTasks(MailboxBase):
             self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, context, seq))
 
     def _task_send_ack(self, context: _socket_context.Connected, next_seq: int):
+        """
+        Task body for sending acks.
+
+        This will send ACK to the remote if no new packet has been sent between this is scheduled and executed.
+
+        :param context: a connected socket context.
+        :param next_seq: the next local seq number of the socket when schedule the task.
+        """
+        # TODO: take into consideration of attempts to reduce unnecessary pure ACKs
         with context.cv:
             if context.closed or context.next_seq != next_seq:
                 # another packet carrying ack has been sent

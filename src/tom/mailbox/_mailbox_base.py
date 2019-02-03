@@ -24,6 +24,16 @@ class MailboxBase:
         self._epolls = {}
 
     def _socket_check_status(self, sid: int, status: Type[SocketContext]) -> SocketContext:
+        """
+        Assert a socket has certain status (i.e. the context of the socket has certain type) and return the context.
+
+        An exception will be raised if the specified socket does not exist or has been closed.
+        An exception will be raised if the specified socket does not have the specified status.
+
+        :param sid: the socket id
+        :param status: a subclass of `SocketContext` to test with
+        :return: the socket context object
+        """
         with self._mutex:
             if not sid in self._sockets:
                 raise Exception('socket does not exist')
@@ -33,12 +43,24 @@ class MailboxBase:
             return context
 
     def _socket_allocate_id(self) -> int:
+        """
+        Allocate a socket id.
+
+        :return: the allocated socket id.
+        """
         with self._mutex:
             sid = self.__next_socket_id
             self.__next_socket_id += 1
             return sid
 
     def _socket_update_ready_status(self, sid: int, type_: str, ready: bool):
+        """
+        Update the ready status of a socket, which is used by epoll.
+
+        :param sid: the socket id
+        :param type_: one of 'read' and 'error'
+        :param ready: the new ready status
+        """
         with self._mutex:
             context: _socket_context.Epollable = self._socket_check_status(sid, _socket_context.Epollable)
             with context.mutex:
