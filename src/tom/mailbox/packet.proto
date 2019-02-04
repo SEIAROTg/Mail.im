@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message Packet {
+    PacketId id = 1;
+    repeated PacketId acks = 2;
+    bytes payload = 1000;
+}
+
+message PacketId {
+    int64 seq = 1;
+    uint64 attempt = 2;
+}

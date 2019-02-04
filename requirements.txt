@@ -2,6 +2,7 @@ imapclient
 pyyaml
 argon2_cffi
 pycryptodome
+protobuf
 
 pytest
 pytest-timeout
