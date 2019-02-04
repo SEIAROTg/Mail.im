@@ -84,3 +84,26 @@ class MailboxBase:
                         epoll_context.cv.notifyAll()
                     else:
                         rs.remove(sid)
+
+    def _socket_close(self, sid: int):
+        """
+        Close a socket but keep its context
+
+        :param sid: socket id
+        """
+        with self._mutex:
+            context = self._sockets.get(sid)
+            if context is None:
+                return
+            with context.mutex:
+                context.closed = True
+                if isinstance(context, _socket_context.Epollable):
+                    self._socket_update_ready_status(sid, 'error', True)
+                if isinstance(context, _socket_context.Waitable):
+                    context: _socket_context.Waitable
+                    context.cv.notify_all()
+                if isinstance(context, _socket_context.Connected):
+                    context: _socket_context.Connected
+                    del self._connected_sockets[(context.local_endpoint, context.remote_endpoint)]
+                elif isinstance(context, _socket_context.Listening):
+                    del self._listening_sockets[sid]

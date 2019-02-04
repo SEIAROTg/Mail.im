@@ -34,6 +34,7 @@ class SocketTestHelper:
             'X-Mailer': 'Mail.im',
             'RTO': 1000,
             'ATO': 1000,
+            'MaxAttempts': 2,
         }
     }
 

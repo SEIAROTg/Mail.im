@@ -244,7 +244,19 @@ def test_send_no_retransmit_after_pure_ack(faker: Faker, helper: SocketTestHelpe
     helper.assert_not_sent(Packet(*endpoints, 0, 1, {(-1, 0)}, payload, is_syn=True))
 
 
+@pytest.mark.timeout(5)
+def test_send_max_attempts(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    socket = helper.create_connected_socket()
+
+    socket.send(payload)
+    with pytest.raises(Exception) as execinfo:
+        socket.recv(100)
+    assert execinfo.match('socket already closed')
+
+
 # recv
+
 
 @pytest.mark.timeout(5)
 def test_recv(faker: Faker, helper: SocketTestHelper):

@@ -1,4 +1,5 @@
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Optional
+import math
 import heapq
 import functools
 import time
@@ -73,7 +74,7 @@ class MailboxTasks(MailboxBase):
             heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
             self.__cv_timer.notify_all()
 
-    def _task_transmit(self, context: _socket_context.Connected, seq: int):
+    def _task_transmit(self, sid: Optional[int], context: _socket_context.Connected, seq: int):
         """
         Task body for transmitting a packet.
 
@@ -100,20 +101,26 @@ class MailboxTasks(MailboxBase):
                 # already acked
                 return
             else:
+                # TODO: close the connection on too many failed attempts
                 attempt = context.attempts[seq]
-                context.attempts[seq] += 1
-                context.sent_acks[(seq, attempt)] = acks
-                packet = Packet(
-                    context.local_endpoint,
-                    context.remote_endpoint, seq,
-                    attempt, acks,
-                    context.pending_local[seq],
-                    is_syn = seq == context.syn_seq)
+                if attempt >= src.config.config['tom']['MaxAttempts']:
+                    # avoid acquiring mailbox mutex while holding context.cv
+                    self._schedule_task(-math.inf, functools.partial(self._task_close_socket, sid))
+                    return
+                else:
+                    context.attempts[seq] += 1
+                    context.sent_acks[(seq, attempt)] = acks
+                    packet = Packet(
+                        context.local_endpoint,
+                        context.remote_endpoint, seq,
+                        attempt, acks,
+                        context.pending_local[seq],
+                        is_syn = seq == context.syn_seq)
         msg = packet.to_message()
         with self._mutex:
             self.__transport.sendmail(local_endpoint.address, remote_endpoint.address, msg.as_bytes())
         if seq != -1:  # do not retransmit pure acks
-            self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, context, seq))
+            self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, sid, context, seq))
 
     def _task_send_ack(self, context: _socket_context.Connected, next_seq: int):
         """
@@ -130,4 +137,7 @@ class MailboxTasks(MailboxBase):
                 # another packet carrying ack has been sent
                 return
         # pure ack does not consume seq number
-        self._task_transmit(context, -1)
+        self._task_transmit(None, context, -1)
+
+    def _task_close_socket(self, sid: int):
+        self._socket_close(sid)

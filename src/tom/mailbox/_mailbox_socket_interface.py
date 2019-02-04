@@ -15,22 +15,11 @@ class MailboxSocketInterface(MailboxTasks):
             return sid
 
     def socket_close(self, sid: int):
+        # TODO: send RST
         with self._mutex:
-            context = self._sockets.get(sid)
-            if context is None:
-                return
-            with context.mutex:
-                context.closed = True
-                if isinstance(context, _socket_context.Epollable):
-                    self._socket_update_ready_status(sid, 'error', True)
-                if isinstance(context, _socket_context.Waitable):
-                    context: _socket_context.Waitable
-                    context.cv.notify_all()
-                if isinstance(context, _socket_context.Connected):
-                    context: _socket_context.Connected
-                    del self._connected_sockets[(context.local_endpoint, context.remote_endpoint)]
-                elif isinstance(context, _socket_context.Listening):
-                    del self._listening_sockets[sid]
+            context = self._socket_check_status(sid, _socket_context.SocketContext)
+            if not context.closed:
+                self._socket_close(sid)
             del self._sockets[sid]
 
     def socket_connect(self, sid: int, local_endpoint: Endpoint, remote_endpoint: Endpoint):
@@ -83,7 +72,7 @@ class MailboxSocketInterface(MailboxTasks):
             seq = context.next_seq
             context.next_seq += 1
             context.pending_local[seq] = buf
-            self._task_transmit(context, seq)
+            self._task_transmit(sid, context, seq)
         return len(buf)
 
     def socket_recv(self, sid: int, max_size: int, timeout: Optional[float] = None) -> bytes:

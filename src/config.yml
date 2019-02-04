@@ -2,3 +2,4 @@ tom:
     X-Mailer: Mail.im
     RTO: 20000 # Retransmission Timeout
     ATO: 2000 # Acknowledgement Delay Timeout
+    MaxAttempts: 3

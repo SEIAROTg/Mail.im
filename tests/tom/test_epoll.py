@@ -32,7 +32,7 @@ def test_read_recv(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload),
@@ -49,7 +49,7 @@ def test_read_recv_reset(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload),
@@ -67,7 +67,7 @@ def test_read_recv_not_reset(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload),
@@ -85,7 +85,7 @@ def test_read_recv_order(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 1, 0, set(), payload),
@@ -101,7 +101,7 @@ def test_read_recv_empty_packet(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), b''),
@@ -118,7 +118,7 @@ def test_read_accept(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_listening_socket(endpoints[0])
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload, is_syn=True),
@@ -135,7 +135,7 @@ def test_read_accept_reset(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_listening_socket(endpoints[0])
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload, is_syn=True),
@@ -154,7 +154,7 @@ def test_read_accept_not_reset(faker: Faker, helper: SocketTestHelper):
     endpoints = [helper.fake_endpoint() for i in range(2)]
     socket = helper.create_listening_socket(local_endpoint)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(endpoints[i], local_endpoint, 0, 0, set(), payload, is_syn=True) for i in range(2)
@@ -170,7 +170,7 @@ def test_read_accept_not_reset(faker: Faker, helper: SocketTestHelper):
 def test_error_recv(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_connected_socket()
     epoll = helper.create_epoll()
-    epoll.add(set(), {socket})
+    epoll.add({socket}, {socket})
 
     helper.defer(socket.close, 0.5)
     rrset, rxset = epoll.wait()
@@ -183,9 +183,23 @@ def test_error_recv(faker: Faker, helper: SocketTestHelper):
 def test_error_accept(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_listening_socket()
     epoll = helper.create_epoll()
-    epoll.add(set(), {socket})
+    epoll.add({socket}, {socket})
 
     helper.defer(socket.close, 0.5)
+    rrset, rxset = epoll.wait()
+
+    assert not rrset
+    assert rxset == {socket}
+
+
+@pytest.mark.timeout(5)
+def test_error_max_attempts(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    socket = helper.create_connected_socket()
+    epoll = helper.create_epoll()
+    epoll.add({socket}, {socket})
+
+    socket.send(payload)
     rrset, rxset = epoll.wait()
 
     assert not rrset
@@ -198,7 +212,7 @@ def test_remove(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     epoll = helper.create_epoll()
-    epoll.add({socket}, set())
+    epoll.add({socket}, {socket})
 
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload)})
     epoll.remove({socket}, set())
