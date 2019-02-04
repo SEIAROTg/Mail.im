@@ -44,6 +44,7 @@ class Connected(Waitable, Epollable):
     sent_acks: Dict[Tuple[int, int], Set[Tuple[int, int]]]      # (seq, attempt) -> {(seq, attempt)}
     attempts: DefaultDict[int, int]                             # seq -> next attempt
     to_ack: Set[Tuple[int, int]]                                # {(seq, attempt)}
+    syn_seq: int = 0
 
     def __init__(self, local_endpoint: Endpoint, remote_endpoint: Endpoint):
         super().__init__()

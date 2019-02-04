@@ -57,7 +57,8 @@ class SocketTestHelper:
         self.mock_transport.return_value.sendmail.side_effect = self.__sendmail_stub
         self.mock_packet = MagicMock()
         self.mock_packet.from_message.side_effect = lambda x: x
-        self.mock_packet.side_effect = lambda *args: Mock(to_message=lambda: Mock(as_bytes=lambda: Packet(*args)))
+        self.mock_packet.side_effect =\
+            lambda *args, **kwargs: Mock(to_message=lambda: Mock(as_bytes=lambda: Packet(*args, **kwargs)))
         patch_packet0 = patch('src.tom.mailbox._mailbox_listener.Packet', self.mock_packet)
         patch_packet1 = patch('src.tom.mailbox._mailbox_tasks.Packet', self.mock_packet)
         patch_packet0.start()

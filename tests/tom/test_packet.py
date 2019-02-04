@@ -14,7 +14,8 @@ def packet(faker: Faker) -> Packet:
     attempt = faker.pyint()
     acks = set((faker.pyint(), faker.pyint()) for i in range(10))
     payload = faker.binary(111)
-    return Packet(from_, to, seq, attempt, acks, payload)
+    is_syn = faker.pybool()
+    return Packet(from_, to, seq, attempt, acks, payload, is_syn)
 
 
 def test_from_message_invalid_mailer(packet: Packet):
@@ -25,18 +26,11 @@ def test_from_message_invalid_mailer(packet: Packet):
     assert execinfo.match('invalid X-Mailer header')
 
 
-def test_to_message(faker: Faker):
-    from_ = Endpoint(faker.email(), faker.uuid4())
-    to = Endpoint(faker.email(), faker.uuid4())
-    seq = faker.pyint()
-    attempt = faker.pyint()
-    acks = set((faker.pyint(), faker.pyint()) for i in range(10))
-    payload = faker.binary(111)
-    packet = Packet(from_, to, seq, attempt, acks, payload)
+def test_to_message(packet: Packet):
     msg = packet.to_message()
     assert msg.get('Content-Type') == 'application/x-mailim-packet'
-    assert msg.get('From') == '{} <{}>'.format(from_.port, from_.address)
-    assert msg.get('To') == '{} <{}>'.format(to.port, to.address)
+    assert msg.get('From') == '{} <{}>'.format(packet.from_.port, packet.from_.address)
+    assert msg.get('To') == '{} <{}>'.format(packet.to.port, packet.to.address)
     assert msg.get('X-Mailer') == config['tom']['X-Mailer']
 
 

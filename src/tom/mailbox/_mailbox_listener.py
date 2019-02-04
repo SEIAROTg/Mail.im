@@ -105,7 +105,7 @@ class MailboxListener(MailboxTasks):
             sid = next((sid
                         for sid, listening_endpoint in self._listening_sockets.items()
                         if listening_endpoint.matches(packet.to)), None)
-            if sid is not None:  # listening socket
+            if packet.is_syn and sid is not None:  # listening socket
                 context: _socket_context.Listening = self._sockets[sid]
                 with context.cv:
                     conn_sid = context.connected_sockets.get((packet.to, packet.from_))
@@ -114,6 +114,7 @@ class MailboxListener(MailboxTasks):
                     else:  # new pending connection
                         conn_sid = self._socket_allocate_id()
                         conn_context = _socket_context.Connected(packet.to, packet.from_)
+                        conn_context.syn_seq = None
                         context.sockets[conn_sid] = conn_context
                         context.connected_sockets[(packet.to, packet.from_)] = conn_sid
                         context.queue.append(conn_sid)

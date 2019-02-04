@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x0cpacket.proto\"J\n\x06Packet\x12\x15\n\x02id\x18\x01 \x01(\x0b\x32\t.PacketId\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\x12\x10\n\x07payload\x18\xe8\x07 \x01(\x0c\"(\n\x08PacketId\x12\x0b\n\x03seq\x18\x01 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\x04\x62\x06proto3')
+  serialized_pb=_b('\n\x0cpacket.proto\"Z\n\x06Packet\x12\x15\n\x02id\x18\x01 \x01(\x0b\x32\t.PacketId\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\x12\x0e\n\x06is_syn\x18\x03 \x01(\x08\x12\x10\n\x07payload\x18\xe8\x07 \x01(\x0c\"(\n\x08PacketId\x12\x0b\n\x03seq\x18\x01 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\x04\x62\x06proto3')
 )
 
 
@@ -48,7 +48,14 @@ _PACKET = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='payload', full_name='Packet.payload', index=2,
+      name='is_syn', full_name='Packet.is_syn', index=2,
+      number=3, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='payload', full_name='Packet.payload', index=3,
       number=1000, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -67,7 +74,7 @@ _PACKET = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=16,
-  serialized_end=90,
+  serialized_end=106,
 )
 
 
@@ -104,8 +111,8 @@ _PACKETID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=92,
-  serialized_end=132,
+  serialized_start=108,
+  serialized_end=148,
 )
 
 _PACKET.fields_by_name['id'].message_type = _PACKETID

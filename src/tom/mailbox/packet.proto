@@ -3,6 +3,7 @@ syntax = "proto3";
 message Packet {
     PacketId id = 1;
     repeated PacketId acks = 2;
+    bool is_syn = 3;
     bytes payload = 1000;
 }
 

@@ -107,7 +107,8 @@ class MailboxTasks(MailboxBase):
                     context.local_endpoint,
                     context.remote_endpoint, seq,
                     attempt, acks,
-                    context.pending_local[seq])
+                    context.pending_local[seq],
+                    is_syn = seq == context.syn_seq)
         msg = packet.to_message()
         with self._mutex:
             self.__transport.sendmail(local_endpoint.address, remote_endpoint.address, msg.as_bytes())

@@ -18,6 +18,7 @@ class Packet:
     attempt: int
     acks: Set[Tuple[int, int]]
     payload: bytes
+    is_syn: bool = False
 
     @staticmethod
     def from_message(msg: email.message.Message) -> Packet:
@@ -32,7 +33,8 @@ class Packet:
         attempt = packet.id.attempt
         acks = set((id.seq, id.attempt) for id in packet.acks)
         payload = packet.payload
-        return Packet(from_, to, seq, attempt, acks, payload)
+        is_syn = packet.is_syn
+        return Packet(from_, to, seq, attempt, acks, payload, is_syn)
 
     def to_message(self: Packet) -> email.message.Message:
         packet = packet_pb2.Packet()
@@ -46,6 +48,7 @@ class Packet:
             acks.append(id)
         packet.acks.extend(acks)
         packet.payload = self.payload
+        packet.is_syn = self.is_syn
         body = MIMEApplication(packet.SerializeToString(), 'x-mailim-packet', email.encoders.encode_base64)
         body.add_header('X-Mailer', src.config.config['tom']['X-Mailer'])
         body.add_header('From', formataddr((self.from_.port, self.from_.address)))

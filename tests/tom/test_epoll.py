@@ -121,7 +121,7 @@ def test_read_accept(faker: Faker, helper: SocketTestHelper):
     epoll.add({socket}, set())
 
     helper.defer(lambda: helper.feed_messages({
-        faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload),
+        faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload, is_syn=True),
     }), 0.5)
     rrset, rxset = epoll.wait()
 
@@ -138,7 +138,7 @@ def test_read_accept_reset(faker: Faker, helper: SocketTestHelper):
     epoll.add({socket}, set())
 
     helper.defer(lambda: helper.feed_messages({
-        faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload),
+        faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload, is_syn=True),
     }), 0.5)
     socket.accept()
     rrset, rxset = epoll.wait(timeout=0)
@@ -157,7 +157,7 @@ def test_read_accept_not_reset(faker: Faker, helper: SocketTestHelper):
     epoll.add({socket}, set())
 
     helper.defer(lambda: helper.feed_messages({
-        faker.pyint(): Packet(endpoints[i], local_endpoint, 0, 0, set(), payload) for i in range(2)
+        faker.pyint(): Packet(endpoints[i], local_endpoint, 0, 0, set(), payload, is_syn=True) for i in range(2)
     }), 0.5)
     socket.accept()
     rrset, rxset = epoll.wait()
