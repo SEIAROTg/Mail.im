@@ -60,7 +60,7 @@ class Socket:
         """
 
         id = self.__mailbox.socket_accept(self.__id, timeout)
-        if id == -1:  # timeout
+        if id is None:  # timeout
             return None
         return Socket(self.__mailbox, id)
 

@@ -113,7 +113,7 @@ def test_accept_multiple_sockets(faker: Faker, helper: SocketTestHelper):
 @pytest.mark.timeout(5)
 def test_accept_timeout(helper: SocketTestHelper):
     listening_sockets = helper.create_listening_socket()
-    listening_sockets.accept(timeout=0)
+    assert listening_sockets.accept(timeout=0) is None
 
 
 @pytest.mark.timeout(5)
