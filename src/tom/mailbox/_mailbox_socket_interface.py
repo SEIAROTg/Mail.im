@@ -14,12 +14,15 @@ class MailboxSocketInterface(MailboxTasks):
             self._sockets[sid] = _socket_context.Created()
             return sid
 
+    def socket_shutdown(self, sid: int):
+        self._socket_shutdown(sid)
+
     def socket_close(self, sid: int):
         # TODO: send RST
         with self._mutex:
             context = self._socket_check_status(sid, _socket_context.SocketContext)
             if not context.closed:
-                self._socket_close(sid)
+                self._socket_shutdown(sid)
             del self._sockets[sid]
 
     def socket_connect(self, sid: int, local_endpoint: Endpoint, remote_endpoint: Endpoint):
@@ -69,6 +72,8 @@ class MailboxSocketInterface(MailboxTasks):
     def socket_send(self, sid: int, buf: bytes) -> int:
         context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
         with context.cv:
+            if context.closed:
+                raise Exception('socket already closed')
             seq = context.next_seq
             context.next_seq += 1
             context.pending_local[seq] = buf

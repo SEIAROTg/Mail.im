@@ -85,9 +85,9 @@ class MailboxBase:
                     else:
                         rs.remove(sid)
 
-    def _socket_close(self, sid: int):
+    def _socket_shutdown(self, sid: int):
         """
-        Close a socket but keep its context
+        Shut down a socket but keep its context
 
         :param sid: socket id
         """

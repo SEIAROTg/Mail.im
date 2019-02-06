@@ -28,6 +28,12 @@ class Socket:
     def __hash__(self) -> int:
         return self.id
 
+    def shutdown(self):
+        """
+        Shut down a socket but keep its context
+        """
+        self.__mailbox.socket_shutdown(self.__id)
+
     def close(self):
         """
         Close the socket.

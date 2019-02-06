@@ -140,4 +140,4 @@ class MailboxTasks(MailboxBase):
         self._task_transmit(None, context, -1)
 
     def _task_close_socket(self, sid: int):
-        self._socket_close(sid)
+        self._socket_shutdown(sid)
