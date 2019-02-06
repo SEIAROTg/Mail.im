@@ -1,6 +1,7 @@
 from typing import Optional
 import functools
 import time
+import pickle
 from ._mailbox_tasks import MailboxTasks
 from . import _socket_context
 from ..endpoint import Endpoint
@@ -114,3 +115,27 @@ class MailboxSocketInterface(MailboxTasks):
             if payload is None:
                 self._socket_update_ready_status(sid, 'read', False)
             return ret
+
+    def socket_dump(self, sid: int) -> bytes:
+        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+        with context.cv:
+            return pickle.dumps(context)
+
+    def socket_restore(self, dump: bytes) -> int:
+        context: _socket_context.Connected = pickle.loads(dump)
+        if not isinstance(context, _socket_context.Connected):
+            raise Exception('invalid socket dump: socket not connected')
+        with self._mutex:
+            sid = self._socket_allocate_id()
+            if (context.local_endpoint, context.remote_endpoint) in self._connected_sockets:
+                raise Exception('address already in use')
+            self._connected_sockets[(context.local_endpoint, context.remote_endpoint)] = sid
+            self._sockets[sid] = context
+            if context.pending_local:
+                for seq in context.pending_local:
+                    self._task_transmit(sid, context, seq)
+            elif context.to_ack:
+                self._schedule_task(
+                    src.config.config['tom']['ATO'] / 1000,
+                    functools.partial(self._task_send_ack, context, context.next_seq))
+        return sid

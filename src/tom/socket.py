@@ -109,6 +109,28 @@ class Socket:
                 timeout -= time.time() - start
         return ret
 
+    def dump(self) -> bytes:
+        """
+        Dump the state of the connected socket.
+
+        :return: socket context information encoded in a bytes-like object.
+        """
+        return self.mailbox.socket_dump(self.id)
+
+    @classmethod
+    def restore(cls, mailbox: Mailbox, dump: bytes):
+        """
+        Restore a connected socket from dumped context information.
+
+        This will immediately retransmit all pending packets and schedule sending pending acks after ATO.
+
+        :param mailbox: `Mailbox` object the dumped socket belongs to.
+        :param dump: dumped data returned by `Socket.dump`.
+        :return: the restored socket.
+        """
+        id = mailbox.socket_restore(dump)
+        return cls(mailbox, id)
+
     @property
     def mailbox(self) -> Mailbox:
         """

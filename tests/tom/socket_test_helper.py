@@ -27,7 +27,7 @@ class SocketTestHelper:
     __mock_imapclient: MagicMock
     __mock_message_from_bytes: MagicMock
     __patches: List[_patch]
-    __mailbox: Mailbox
+    mailbox: Mailbox
 
     __config_stub = {
         'tom': {
@@ -70,7 +70,7 @@ class SocketTestHelper:
         patch_message_from_bytes = patch('email.message_from_bytes')
         self.__mock_message_from_bytes = patch_message_from_bytes.start()
         self.__mock_message_from_bytes.side_effect = lambda x: x
-        self.__mailbox = Mailbox(self.__fake_credential(), self.__fake_credential())
+        self.mailbox = Mailbox(self.__fake_credential(), self.__fake_credential())
         self.__patches = [
             patch_config,
             patch_transport,
@@ -79,7 +79,7 @@ class SocketTestHelper:
             patch_imapclient,
             patch_message_from_bytes]
 
-        self.__thread_mailbox = threading.Thread(target=self.__mailbox.join)
+        self.__thread_mailbox = threading.Thread(target=self.mailbox.join)
         self.__thread_mailbox.start()
 
     def __del__(self):
@@ -89,7 +89,7 @@ class SocketTestHelper:
         with self.__cv_listen:
             self.__closed = True
             self.__cv_listen.notify_all()
-        self.__mailbox.close()
+        self.mailbox.close()
         self.__thread_mailbox.join()
         for patch in self.__patches:
             patch.stop()
@@ -99,20 +99,20 @@ class SocketTestHelper:
             self,
             local_endpoint: Optional[Endpoint] = None,
             remote_endpoint: Optional[Endpoint] = None):
-        socket = Socket(self.__mailbox)
+        socket = Socket(self.mailbox)
         local_endpoint = local_endpoint or self.fake_endpoint()
         remote_endpoint = remote_endpoint or self.fake_endpoint()
         socket.connect(local_endpoint, remote_endpoint)
         return socket
 
     def create_listening_socket(self, local_endpoint: Optional[Endpoint] = None):
-        socket = Socket(self.__mailbox)
+        socket = Socket(self.mailbox)
         local_endpoint = local_endpoint or self.fake_endpoint()
         socket.listen(local_endpoint)
         return socket
 
     def create_epoll(self) -> Epoll:
-        return Epoll(self.__mailbox)
+        return Epoll(self.mailbox)
 
     def feed_messages(self, messages: Dict[int, Packet]):
         assert messages, 'feeding no messages'
