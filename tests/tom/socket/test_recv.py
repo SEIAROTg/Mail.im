@@ -5,7 +5,7 @@ from unittest.mock import call
 import imapclient
 import time
 from src.tom import Endpoint
-from src.tom._mailbox.packet import Packet
+from src.tom._mailbox.packet import PlainPacket as Packet
 
 
 @pytest.mark.timeout(5)

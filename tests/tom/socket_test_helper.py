@@ -7,7 +7,7 @@ from imapclient import SEEN
 from imapclient.response_types import Envelope, Address
 from faker import Faker
 from src.tom import Mailbox, Credential, Endpoint, Socket, Epoll
-from src.tom._mailbox.packet import Packet
+from src.tom._mailbox.packet import PlainPacket as Packet
 
 
 class SocketTestHelper:
@@ -60,8 +60,8 @@ class SocketTestHelper:
         self.mock_packet.from_message.side_effect = lambda x: x
         self.mock_packet.side_effect =\
             lambda *args, **kwargs: Mock(to_message=lambda: Mock(as_bytes=lambda: Packet(*args, **kwargs)))
-        patch_packet0 = patch('src.tom._mailbox.mailbox_listener.Packet', self.mock_packet)
-        patch_packet1 = patch('src.tom._mailbox.mailbox_tasks.Packet', self.mock_packet)
+        patch_packet0 = patch('src.tom._mailbox.mailbox_listener.PlainPacket', self.mock_packet)
+        patch_packet1 = patch('src.tom._mailbox.mailbox_tasks.PlainPacket', self.mock_packet)
         patch_packet0.start()
         patch_packet1.start()
         patch_imapclient = patch('src.tom._mailbox.imapclient.IMAPClient')

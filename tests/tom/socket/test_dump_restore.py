@@ -2,7 +2,7 @@ import pytest
 import time
 from faker import Faker
 from src.tom import Socket
-from src.tom._mailbox.packet import Packet
+from src.tom._mailbox.packet import PlainPacket as Packet
 from ..socket_test_helper import SocketTestHelper
 
 

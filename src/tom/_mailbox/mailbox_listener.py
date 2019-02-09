@@ -5,7 +5,7 @@ import os
 import threading
 import imapclient.response_types
 from .mailbox_tasks import MailboxTasks
-from .packet import Packet
+from .packet import PlainPacket
 from ..credential import Credential
 from . import socket_context, imapclient
 import src.config
@@ -81,7 +81,7 @@ class MailboxListener(MailboxTasks):
 
     def __process_incoming_packet(self, message: Dict[bytes, Any]) -> bool:
         msg = email.message_from_bytes(message[b'BODY[]'])
-        packet = Packet.from_message(msg)
+        packet = PlainPacket.from_message(msg)
 
         with self._mutex:
             sid = self._connected_sockets.get((packet.to, packet.from_))

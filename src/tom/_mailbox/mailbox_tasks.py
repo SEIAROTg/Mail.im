@@ -6,7 +6,7 @@ import time
 import threading
 import smtplib
 from .mailbox_base import MailboxBase
-from .packet import Packet
+from .packet import PlainPacket
 from . import socket_context
 from ..credential import Credential
 import src.config
@@ -96,7 +96,7 @@ class MailboxTasks(MailboxBase):
             if seq == -1:
                 if not acks:  # nothing to ack
                     return
-                packet = Packet(context.local_endpoint, context.remote_endpoint, seq, 0, acks, b'')
+                packet = PlainPacket(context.local_endpoint, context.remote_endpoint, seq, 0, acks, b'')
             elif not seq in context.pending_local:
                 # already acked
                 return
@@ -110,7 +110,7 @@ class MailboxTasks(MailboxBase):
                 else:
                     context.attempts[seq] += 1
                     context.sent_acks[(seq, attempt)] = acks
-                    packet = Packet(
+                    packet = PlainPacket(
                         context.local_endpoint,
                         context.remote_endpoint, seq,
                         attempt, acks,

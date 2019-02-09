@@ -1,7 +1,7 @@
 import pytest
 from ..socket_test_helper import SocketTestHelper
 from faker import Faker
-from src.tom._mailbox.packet import Packet
+from src.tom._mailbox.packet import PlainPacket as Packet
 
 
 @pytest.mark.timeout(5)
