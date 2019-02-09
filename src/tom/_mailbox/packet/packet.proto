@@ -15,3 +15,11 @@ message PlainPacket {
     bool is_syn = 1;
     PacketBody body = 1000;
 }
+
+message SecurePacket {
+    bool is_syn = 1;
+    bytes dh_pub = 2;
+    uint64 n = 3;
+    uint64 pn = 4;
+    bytes body = 1000;
+}

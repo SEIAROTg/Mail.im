@@ -26,6 +26,14 @@ def test_from_message_invalid_mailer(packet: Packet):
     assert execinfo.match('invalid X-Mailer header')
 
 
+def test_from_message_invalid_content_type(packet: Packet):
+    msg = packet.to_message()
+    msg.replace_header('Content-Type', 'application/x-mailim-packet-secure')
+    with pytest.raises(Exception) as execinfo:
+        Packet.from_message(msg)
+    assert execinfo.match('invalid Content-Type header')
+
+
 def test_to_message(packet: Packet):
     msg = packet.to_message()
     assert msg.get('Content-Type') == 'application/x-mailim-packet'
@@ -48,11 +56,9 @@ def test_negative_seq(faker: Faker):
     assert recovered_packet.seq == -1
 
 
-def test_line_ending(faker: Faker):
-    from_ = Endpoint(faker.email(), faker.uuid4())
-    to = Endpoint(faker.email(), faker.uuid4())
+def test_line_ending(packet: Packet):
     payload = b'abc\r123\ndef\r\n456\n\rxyz'
-    packet = Packet(from_, to, 0, 0, set(), payload)
+    packet.payload = payload
     msg = packet.to_message()
     bytes_ = msg.as_bytes()
     recovered_msg = email.message_from_bytes(bytes_)
