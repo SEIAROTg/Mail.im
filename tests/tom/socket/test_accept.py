@@ -1,3 +1,4 @@
+import time
 import pytest
 from ..socket_test_helper import SocketTestHelper
 from faker import Faker
@@ -42,7 +43,23 @@ def test_reply_no_syn(faker: Faker, helper: SocketTestHelper):
 
 
 @pytest.mark.timeout(5)
-def test_multiple(faker: Faker, helper: SocketTestHelper):
+def test_multiple_packets(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payloads = [faker.binary(111) for i in range(3)]
+    listening_socket = helper.create_listening_socket(endpoints[0])
+
+    helper.feed_messages({
+        faker.pyint(): Packet(*reversed(endpoints), i, 0, set(), payloads[i], is_syn=i==0) for i in range(3)
+    })
+    time.sleep(0.5)
+    socket = listening_socket.accept()
+    for i in range(3):
+        data = socket.recv_exact(111)
+        assert data == payloads[i]
+
+
+@pytest.mark.timeout(5)
+def test_multiple_connections(faker: Faker, helper: SocketTestHelper):
     payloads = [faker.binary(111) for i in range(3)]
     endpoints = [helper.fake_endpoints() for i in range(3)]
     listening_socket = helper.create_listening_socket(Endpoint('', ''))

@@ -105,13 +105,13 @@ class MailboxListener(MailboxTasks):
             sid = next((sid
                         for sid, listening_endpoint in self._listening_sockets.items()
                         if listening_endpoint.matches(packet.to)), None)
-            if packet.is_syn and sid is not None:  # listening socket
+            if sid is not None:  # listening socket
                 context: socket_context.Listening = self._sockets[sid]
                 with context.cv:
                     conn_sid = context.connected_sockets.get((packet.to, packet.from_))
                     if conn_sid: # existing pending connection
-                        conn_context = context.sockets[sid]
-                    else:  # new pending connection
+                        conn_context = context.sockets[conn_sid]
+                    elif packet.is_syn:  # new pending connection
                         conn_sid = self._socket_allocate_id()
                         conn_context = socket_context.Connected(packet.to, packet.from_)
                         conn_context.syn_seq = None
@@ -120,6 +120,8 @@ class MailboxListener(MailboxTasks):
                         context.queue.append(conn_sid)
                         self._socket_update_ready_status(sid, 'read', True)
                         context.cv.notify_all()
+                    else:
+                        return False
                     conn_context.pending_remote[packet.seq] = packet.payload
                     conn_context.to_ack.add((packet.seq, packet.attempt))
                 return True
