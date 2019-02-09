@@ -1,7 +1,7 @@
 from ..credential import Credential
-from ._mailbox_listener import MailboxListener
-from ._mailbox_socket_interface import MailboxSocketInterface
-from ._mailbox_epoll_interface import MailboxEpollInterface
+from .mailbox_listener import MailboxListener
+from .mailbox_socket_interface import MailboxSocketInterface
+from .mailbox_epoll_interface import MailboxEpollInterface
 
 
 class Mailbox(MailboxListener, MailboxSocketInterface, MailboxEpollInterface):

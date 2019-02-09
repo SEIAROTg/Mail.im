@@ -1,9 +1,9 @@
 from typing import Dict, Tuple, Type
 import threading
-from ._socket_context import SocketContext
-from . import _socket_context
+from .socket_context import SocketContext
+from . import socket_context
 from ..endpoint import Endpoint
-from ._epoll_context import EpollContext
+from .epoll_context import EpollContext
 
 
 class MailboxBase:
@@ -62,7 +62,7 @@ class MailboxBase:
         :param ready: the new ready status
         """
         with self._mutex:
-            context: _socket_context.Epollable = self._socket_check_status(sid, _socket_context.Epollable)
+            context: socket_context.Epollable = self._socket_check_status(sid, socket_context.Epollable)
             with context.mutex:
                 if type_ == 'read':
                     eids = context.repolls
@@ -97,13 +97,13 @@ class MailboxBase:
                 return
             with context.mutex:
                 context.closed = True
-                if isinstance(context, _socket_context.Epollable):
+                if isinstance(context, socket_context.Epollable):
                     self._socket_update_ready_status(sid, 'error', True)
-                if isinstance(context, _socket_context.Waitable):
-                    context: _socket_context.Waitable
+                if isinstance(context, socket_context.Waitable):
+                    context: socket_context.Waitable
                     context.cv.notify_all()
-                if isinstance(context, _socket_context.Connected):
-                    context: _socket_context.Connected
+                if isinstance(context, socket_context.Connected):
+                    context: socket_context.Connected
                     del self._connected_sockets[(context.local_endpoint, context.remote_endpoint)]
-                elif isinstance(context, _socket_context.Listening):
+                elif isinstance(context, socket_context.Listening):
                     del self._listening_sockets[sid]

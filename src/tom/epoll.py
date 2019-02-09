@@ -1,5 +1,5 @@
 from typing import Set, Tuple, Optional
-from .mailbox import Mailbox
+from ._mailbox import Mailbox
 from .socket import Socket
 
 

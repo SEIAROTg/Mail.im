@@ -6,7 +6,7 @@ from src.tom import Credential, Mailbox
 
 @pytest.mark.timeout(5)
 @patch('smtplib.SMTP')
-@patch('src.tom.mailbox._imapclient.IMAPClient')
+@patch('src.tom._mailbox.imapclient.IMAPClient')
 def test_mailbox(IMAPClient: MagicMock, SMTP: MagicMock, faker: Faker):
     smtp = Credential(host=faker.hostname(), port=faker.pyint(), username=faker.email(), password=faker.password())
     imap = Credential(host=faker.hostname(), port=faker.pyint(), username=faker.email(), password=faker.password())

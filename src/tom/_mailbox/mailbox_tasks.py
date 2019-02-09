@@ -5,9 +5,9 @@ import functools
 import time
 import threading
 import smtplib
-from ._mailbox_base import MailboxBase
-from ._packet import Packet
-from . import _socket_context
+from .mailbox_base import MailboxBase
+from .packet import Packet
+from . import socket_context
 from ..credential import Credential
 import src.config
 
@@ -74,7 +74,7 @@ class MailboxTasks(MailboxBase):
             heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
             self.__cv_timer.notify_all()
 
-    def _task_transmit(self, sid: Optional[int], context: _socket_context.Connected, seq: int):
+    def _task_transmit(self, sid: Optional[int], context: socket_context.Connected, seq: int):
         """
         Task body for transmitting a packet.
 
@@ -122,7 +122,7 @@ class MailboxTasks(MailboxBase):
         if seq != -1:  # do not retransmit pure acks
             self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, sid, context, seq))
 
-    def _task_send_ack(self, context: _socket_context.Connected, next_seq: int):
+    def _task_send_ack(self, context: socket_context.Connected, next_seq: int):
         """
         Task body for sending acks.
 

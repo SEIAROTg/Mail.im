@@ -1,6 +1,6 @@
 import pytest
 from faker import Faker
-from src.tom.mailbox._packet import Packet
+from src.tom._mailbox.packet import Packet
 from ..socket_test_helper import SocketTestHelper
 
 

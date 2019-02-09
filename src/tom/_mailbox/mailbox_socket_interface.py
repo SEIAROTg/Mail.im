@@ -2,8 +2,8 @@ from typing import Optional
 import functools
 import time
 import pickle
-from ._mailbox_tasks import MailboxTasks
-from . import _socket_context
+from .mailbox_tasks import MailboxTasks
+from . import socket_context
 from ..endpoint import Endpoint
 import src.config
 
@@ -12,7 +12,7 @@ class MailboxSocketInterface(MailboxTasks):
     def socket_create(self) -> int:
         with self._mutex:
             sid = self._socket_allocate_id()
-            self._sockets[sid] = _socket_context.Created()
+            self._sockets[sid] = socket_context.Created()
             return sid
 
     def socket_shutdown(self, sid: int):
@@ -21,30 +21,30 @@ class MailboxSocketInterface(MailboxTasks):
     def socket_close(self, sid: int):
         # TODO: send RST
         with self._mutex:
-            context = self._socket_check_status(sid, _socket_context.SocketContext)
+            context = self._socket_check_status(sid, socket_context.SocketContext)
             if not context.closed:
                 self._socket_shutdown(sid)
             del self._sockets[sid]
 
     def socket_connect(self, sid: int, local_endpoint: Endpoint, remote_endpoint: Endpoint):
         with self._mutex:
-            self._socket_check_status(sid, _socket_context.Created)
+            self._socket_check_status(sid, socket_context.Created)
             if (local_endpoint, remote_endpoint) in self._connected_sockets:
                 raise Exception('address already in use')
             self._connected_sockets[(local_endpoint, remote_endpoint)] = sid
-            self._sockets[sid] = _socket_context.Connected(local_endpoint, remote_endpoint)
+            self._sockets[sid] = socket_context.Connected(local_endpoint, remote_endpoint)
 
     def socket_listen(self, sid: int, local_endpoint: Endpoint):
         with self._mutex:
-            self._socket_check_status(sid, _socket_context.Created)
+            self._socket_check_status(sid, socket_context.Created)
             if any(local_endpoint.intersects_with(listening_endpoint)
                    for listening_endpoint in self._listening_sockets.values()):
                 raise Exception('address already in use')
             self._listening_sockets[sid] = local_endpoint
-            self._sockets[sid] = _socket_context.Listening(local_endpoint)
+            self._sockets[sid] = socket_context.Listening(local_endpoint)
 
     def socket_accept(self, sid: int, timeout: Optional[float] = None) -> Optional[int]:
-        context: _socket_context.Listening = self._socket_check_status(sid, _socket_context.Listening)
+        context: socket_context.Listening = self._socket_check_status(sid, socket_context.Listening)
         with context.cv:
             while not context.closed and not context.queue and (timeout is None or timeout > 0):
                 start = time.time()
@@ -56,7 +56,7 @@ class MailboxSocketInterface(MailboxTasks):
             if not context.queue: # timeout
                 return None
             conn_sid = context.queue.popleft()
-            conn_context: _socket_context.Connected = context.sockets[conn_sid]
+            conn_context: socket_context.Connected = context.sockets[conn_sid]
         with self._mutex:
             with context.cv:
                 del context.connected_sockets[(conn_context.local_endpoint, conn_context.remote_endpoint)]
@@ -71,7 +71,7 @@ class MailboxSocketInterface(MailboxTasks):
             return conn_sid
 
     def socket_send(self, sid: int, buf: bytes) -> int:
-        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+        context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
         with context.cv:
             if context.closed:
                 raise Exception('socket already closed')
@@ -82,7 +82,7 @@ class MailboxSocketInterface(MailboxTasks):
         return len(buf)
 
     def socket_recv(self, sid: int, max_size: int, timeout: Optional[float] = None) -> bytes:
-        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+        context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
         with context.cv:
             while (
                     not context.closed
@@ -117,13 +117,13 @@ class MailboxSocketInterface(MailboxTasks):
             return ret
 
     def socket_dump(self, sid: int) -> bytes:
-        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+        context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
         with context.cv:
             return pickle.dumps(context)
 
     def socket_restore(self, dump: bytes) -> int:
-        context: _socket_context.Connected = pickle.loads(dump)
-        if not isinstance(context, _socket_context.Connected):
+        context: socket_context.Connected = pickle.loads(dump)
+        if not isinstance(context, socket_context.Connected):
             raise Exception('invalid socket dump: socket not connected')
         with self._mutex:
             sid = self._socket_allocate_id()

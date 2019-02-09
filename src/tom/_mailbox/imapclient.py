@@ -1,16 +1,16 @@
 import sys
 import socket
 import select
-import imapclient
-import imapclient.imapclient
+import imapclient as _imapclient
+from imapclient import *
 
 
-class IMAPClient(imapclient.IMAPClient):
+class IMAPClient(_imapclient.IMAPClient):
     """
     This class provdes some extensions to `imapclient.IMAPClient`
     """
 
-    @imapclient.imapclient.require_capability('IDLE')
+    @imapclient.require_capability('IDLE')
     def idle_check(self, timeout: float = None, selfpipe: int = None):
         """
         This extends imapclient.IMAPClient.idle_check with elegant exiting mechanism via selfpipe
@@ -54,7 +54,7 @@ class IMAPClient(imapclient.IMAPClient):
                         else:
                             raise
                     else:
-                        resps.append(imapclient.imapclient._parse_untagged_response(line))
+                        resps.append(imapclient._parse_untagged_response(line))
             return resps
         finally:
             sock.setblocking(1)

@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 import socket
 import pytest
 from faker import Faker
-from src.tom.mailbox._imapclient import IMAPClient
+from src.tom._mailbox.imapclient import IMAPClient
 
 
 @pytest.fixture()

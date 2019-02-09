@@ -1,8 +1,8 @@
 from typing import Set, Optional, Tuple, List
 import time
-from ._mailbox_base import MailboxBase
-from ._epoll_context import EpollContext
-from . import _socket_context
+from .mailbox_base import MailboxBase
+from .epoll_context import EpollContext
+from . import socket_context
 
 
 class MailboxEpollInterface(MailboxBase):
@@ -69,11 +69,11 @@ class MailboxEpollInterface(MailboxBase):
         sids = sorted(sidset)
 
         class GetSocket:
-            __contexts: List[_socket_context.Epollable]
+            __contexts: List[socket_context.Epollable]
 
-            def __enter__(self) -> List[_socket_context.Epollable]:
+            def __enter__(self) -> List[socket_context.Epollable]:
                 with mailbox._mutex:
-                    self.__contexts = [mailbox._socket_check_status(sid, _socket_context.Epollable) for sid in sids]
+                    self.__contexts = [mailbox._socket_check_status(sid, socket_context.Epollable) for sid in sids]
                 for context in self.__contexts:
                     context.mutex.acquire()
                 return self.__contexts

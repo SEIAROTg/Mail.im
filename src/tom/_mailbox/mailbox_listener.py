@@ -4,24 +4,24 @@ import email
 import os
 import threading
 import imapclient.response_types
-from ._mailbox_tasks import MailboxTasks
-from ._packet import Packet
+from .mailbox_tasks import MailboxTasks
+from .packet import Packet
 from ..credential import Credential
-from . import _socket_context, _imapclient
+from . import socket_context, imapclient
 import src.config
 
 
 class MailboxListener(MailboxTasks):
-    __store: _imapclient.IMAPClient
-    __listener: _imapclient.IMAPClient
+    __store: imapclient.IMAPClient
+    __listener: imapclient.IMAPClient
     __mutex_listener: threading.RLock
     __selfpipe: Tuple[int, int]
     __thread_listener: threading.Thread
     __closed: bool = False
 
     @staticmethod
-    def __init_imap(credential: Credential) -> _imapclient.IMAPClient:
-        imap = _imapclient.IMAPClient(credential.host, credential.port, ssl=True, use_uid=True)
+    def __init_imap(credential: Credential) -> imapclient.IMAPClient:
+        imap = imapclient.IMAPClient(credential.host, credential.port, ssl=True, use_uid=True)
         imap.login(credential.username, credential.password)
         imap.select_folder('INBOX')
         return imap
@@ -86,7 +86,7 @@ class MailboxListener(MailboxTasks):
         with self._mutex:
             sid = self._connected_sockets.get((packet.to, packet.from_))
             if sid is not None:  # connected socket
-                context: _socket_context.Connected = self._sockets[sid]
+                context: socket_context.Connected = self._sockets[sid]
                 with context.cv:
                     for ack_seq, ack_attempt in packet.acks:
                         self.__process_ack(sid, ack_seq, ack_attempt)
@@ -106,14 +106,14 @@ class MailboxListener(MailboxTasks):
                         for sid, listening_endpoint in self._listening_sockets.items()
                         if listening_endpoint.matches(packet.to)), None)
             if packet.is_syn and sid is not None:  # listening socket
-                context: _socket_context.Listening = self._sockets[sid]
+                context: socket_context.Listening = self._sockets[sid]
                 with context.cv:
                     conn_sid = context.connected_sockets.get((packet.to, packet.from_))
                     if conn_sid: # existing pending connection
                         conn_context = context.sockets[sid]
                     else:  # new pending connection
                         conn_sid = self._socket_allocate_id()
-                        conn_context = _socket_context.Connected(packet.to, packet.from_)
+                        conn_context = socket_context.Connected(packet.to, packet.from_)
                         conn_context.syn_seq = None
                         context.sockets[conn_sid] = conn_context
                         context.connected_sockets[(packet.to, packet.from_)] = conn_sid
@@ -127,7 +127,7 @@ class MailboxListener(MailboxTasks):
         return False
 
     def __process_ack(self, sid: int, seq: int, attempt: int):
-        context: _socket_context.Connected = self._socket_check_status(sid, _socket_context.Connected)
+        context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
         total_attempts = context.attempts.get(seq)
         if total_attempts is None:
             # duplicated ack
