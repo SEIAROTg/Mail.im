@@ -3,6 +3,8 @@ pyyaml
 argon2_cffi
 pycryptodome
 protobuf
+DoubleRatchet
+pynacl
 
 pytest
 pytest-timeout

@@ -3,3 +3,5 @@ tom:
     RTO: 20000 # Retransmission Timeout
     ATO: 2000 # Acknowledgement Delay Timeout
     MaxAttempts: 3
+crypto:
+    MaxMsgKeys: 5
