@@ -28,6 +28,48 @@ def test_simple(faker: Faker, helper: SocketTestHelper):
 
 
 @pytest.mark.timeout(5)
+def test_empty_packet(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payload = faker.binary(111)
+    uid = faker.pyint()
+    messages0 = {
+        uid: Packet(*reversed(endpoints), 0, 0, set(), b''),
+    }
+    messages1 = {
+        uid + 1: Packet(*reversed(endpoints), 1, 0, set(), payload),
+    }
+    socket = helper.create_connected_socket(*endpoints)
+
+    helper.defer(lambda: helper.feed_messages(messages0), 0.5)
+    helper.defer(lambda: helper.feed_messages(messages1), 1)
+    ret = socket.recv(len(payload))
+    socket.close()
+
+    assert ret == payload
+
+
+@pytest.mark.timeout(5)
+def test_existing_empty_packet(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payload = faker.binary(111)
+    uid = faker.pyint()
+    messages0 = {
+        uid: Packet(*reversed(endpoints), 0, 0, set(), b''),
+    }
+    helper.feed_messages(messages0)
+    messages1 = {
+        uid + 1: Packet(*reversed(endpoints), 1, 0, set(), payload),
+    }
+    socket = helper.create_connected_socket(*endpoints)
+
+    helper.defer(lambda: helper.feed_messages(messages1), 0.5)
+    ret = socket.recv(len(payload))
+    socket.close()
+
+    assert ret == payload
+
+
+@pytest.mark.timeout(5)
 def test_not_block(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     payload = faker.binary(111)

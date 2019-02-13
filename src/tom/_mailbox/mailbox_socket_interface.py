@@ -84,16 +84,19 @@ class MailboxSocketInterface(MailboxTasks):
     def socket_recv(self, sid: int, max_size: int, timeout: Optional[float] = None) -> bytes:
         context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
         with context.cv:
+            seq, off = context.recv_cursor
             while (
                     not context.closed
-                    and context.pending_remote.get(context.recv_cursor[0]) is None
+                    and not context.pending_remote.get(seq)
                     and (timeout is None or timeout > 0)):
                 start = time.time()
                 context.cv.wait(timeout)
+                while context.pending_remote.get(seq) == b'':
+                    del context.pending_remote[seq]
+                    seq += 1
                 if timeout:
                     timeout -= time.time() - start
             ret = b''
-            seq, off = context.recv_cursor
             payload = context.pending_remote.get(seq)
             while payload is not None and max_size:
                 seg = payload[off:off+max_size]
@@ -104,14 +107,13 @@ class MailboxSocketInterface(MailboxTasks):
                     del context.pending_remote[seq]
                     seq += 1
                     off = 0
-                context.recv_cursor = (seq, off)
                 payload = context.pending_remote.get(seq)
-            if context.closed and not ret:
-                raise Exception('socket already closed')
             while payload == b'':
                 seq += 1
-                context.recv_cursor = (seq, off)
                 payload = context.pending_remote.get(seq)
+            context.recv_cursor = (seq, off)
+            if context.closed and not ret:
+                raise Exception('socket already closed')
             if payload is None:
                 self._socket_update_ready_status(sid, 'read', False)
             return ret
