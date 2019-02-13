@@ -29,14 +29,7 @@ class SocketTestHelper:
     __patches: List[_patch]
     mailbox: Mailbox
 
-    __config_stub = {
-        'tom': {
-            'X-Mailer': 'Mail.im',
-            'RTO': 1000,
-            'ATO': 1000,
-            'MaxAttempts': 2,
-        }
-    }
+    mock_config: Dict
 
     def __init__(self):
         self.__mutex = threading.RLock()
@@ -45,8 +38,16 @@ class SocketTestHelper:
         self.__faker = Faker()
         self.__messages = {}
         self.__send_queue = deque()
-        patch_config = patch.dict('src.config.config', self.__config_stub)
-        self.mock_config = patch_config.start()
+        self.mock_config = {
+            'tom': {
+                'X-Mailer': 'Mail.im',
+                'RTO': 1000,
+                'ATO': 1000,
+                'MaxAttempts': 2,
+            }
+        }
+        patch_config = patch.dict('src.config.config', self.mock_config)
+        patch_config.start()
         self.mock_store = MagicMock()
         self.mock_store.search.side_effect = self.__search_stub
         self.mock_store.fetch.side_effect = self.__fetch_stub
@@ -143,6 +144,11 @@ class SocketTestHelper:
         with self.__mutex:
             for sent_packet in self.__send_queue:
                 assert sent_packet != packet, 'packet has been sent'
+
+    def assert_no_packets_sent(self, timeout: float = 0):
+        time.sleep(timeout)
+        with self.__mutex:
+            assert not self.__send_queue
 
     def __sendmail_stub(self, from_address, to_address, packet: Packet):
         assert from_address == packet.from_.address

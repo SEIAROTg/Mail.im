@@ -74,6 +74,15 @@ class MailboxTasks(MailboxBase):
             heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
             self.__cv_timer.notify_all()
 
+    def _schedule_ack(self, context: socket_context.Connected):
+        with context.cv:
+            if context.ack_scheduled:
+                return
+            context.ack_scheduled = True
+            self._schedule_task(
+                src.config.config['tom']['ATO'] / 1000,
+                functools.partial(self._task_send_ack, context, context.next_seq))
+
     def _task_transmit(self, sid: Optional[int], context: socket_context.Connected, seq: int):
         """
         Task body for transmitting a packet.
@@ -116,6 +125,7 @@ class MailboxTasks(MailboxBase):
                         attempt, acks,
                         context.pending_local[seq],
                         is_syn = seq == context.syn_seq)
+            context.ack_scheduled = False
         msg = packet.to_message()
         with self._mutex:
             self.__transport.sendmail(local_endpoint.address, remote_endpoint.address, msg.as_bytes())

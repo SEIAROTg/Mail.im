@@ -91,9 +91,9 @@ def test_not_block(faker: Faker, helper: SocketTestHelper):
 def test_multiple_packets(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
-    uids = faker.pylist(3, False, int)
+    uid = faker.pyint()
     messages = {
-        uids[i]: Packet(*reversed(endpoints), i, 0, set(), payloads[i]) for i in range(3)
+        uid + i: Packet(*reversed(endpoints), i, 0, set(), payloads[i]) for i in range(3)
     }
     socket = helper.create_connected_socket(*endpoints)
 
@@ -103,7 +103,7 @@ def test_multiple_packets(faker: Faker, helper: SocketTestHelper):
     socket.close()
 
     assert ret == b''.join(payloads)[:195]
-    helper.mock_store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
+    helper.mock_store.add_flags.assert_called_once_with([uid + i for i in range(3)], [imapclient.SEEN])
 
 
 @pytest.mark.timeout(5)
@@ -133,9 +133,9 @@ def test_exact(faker: Faker, helper: SocketTestHelper):
 def test_exact_multiple_packets(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
-    uids = faker.pylist(3, False, int)
+    uid = faker.pyint()
     messages = {
-        uids[i]: Packet(*reversed(endpoints), i, 0, set(), payloads[i]) for i in range(3)
+        uid + i: Packet(*reversed(endpoints), i, 0, set(), payloads[i]) for i in range(3)
     }
     socket = helper.create_connected_socket(*endpoints)
 
@@ -144,7 +144,7 @@ def test_exact_multiple_packets(faker: Faker, helper: SocketTestHelper):
     socket.close()
 
     assert ret == b''.join(payloads)[:195]
-    helper.mock_store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
+    helper.mock_store.add_flags.assert_called_once_with([uid + i for i in range(3)], [imapclient.SEEN])
 
 
 @pytest.mark.timeout(5)
@@ -152,11 +152,11 @@ def test_multiple_sockets(faker: Faker, helper: SocketTestHelper):
     endpoints1 = helper.fake_endpoints()
     endpoints2 = (Endpoint(endpoints1[0].address, '!' + endpoints1[0].port), endpoints1[1])
     payloads = [faker.binary(111), faker.binary(36), faker.binary(1), faker.binary(71), faker.binary(53)]
-    uids = faker.pylist(5, False, int)
+    uid = faker.pyint()
     seqs = [0, 0, 1, 2, 1]
     targets = [endpoints1, endpoints2, endpoints2, endpoints2, endpoints1]
     messages = {
-        uids[i]: Packet(*reversed(targets[i]), seqs[i], 0, set(), payloads[i]) for i in range(5)
+        uid + i: Packet(*reversed(targets[i]), seqs[i], 0, set(), payloads[i]) for i in range(5)
     }
     socket1 = helper.create_connected_socket(*endpoints1)
     socket2 = helper.create_connected_socket(*endpoints2)
@@ -169,7 +169,7 @@ def test_multiple_sockets(faker: Faker, helper: SocketTestHelper):
 
     assert ret1 == payloads[0] + payloads[4]
     assert ret2 == payloads[1] + payloads[2] + payloads[3]
-    helper.mock_store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
+    helper.mock_store.add_flags.assert_called_once_with([uid + i for i in range(5)], [imapclient.SEEN])
 
 
 @pytest.mark.timeout(5)
@@ -207,10 +207,10 @@ def test_invalid_packets(faker: Faker, helper: SocketTestHelper):
 def test_order(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     payloads = [faker.binary(111), faker.binary(36), faker.binary(71)]
-    uids = faker.pylist(3, False, int)
+    uid = faker.pyint()
     seqs = [2, 0, 1]
     messages = {
-        uids[i]: Packet(*reversed(endpoints), seqs[i], 0, set(), payloads[i]) for i in range(3)
+        uid + i: Packet(*reversed(endpoints), seqs[i], 0, set(), payloads[i]) for i in range(3)
     }
     socket = helper.create_connected_socket(*endpoints)
 
@@ -219,7 +219,7 @@ def test_order(faker: Faker, helper: SocketTestHelper):
     socket.close()
 
     assert ret == payloads[1] + payloads[2] + payloads[0]
-    helper.mock_store.add_flags.assert_called_once_with(uids, [imapclient.SEEN])
+    helper.mock_store.add_flags.assert_called_once_with([uid + i for i in range(3)], [imapclient.SEEN])
 
 
 @pytest.mark.timeout(5)
@@ -260,3 +260,71 @@ def test_no_ack_to_pure_ack(faker: Faker, helper: SocketTestHelper):
     helper.assert_sent(Packet(*endpoints, 0, 0, set(), payload, is_syn=True))
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), -1, 0, {(0, 0)}, b'', is_syn=False)})
     helper.assert_not_sent(Packet(*endpoints, -1, 0, {(0, 0)}, b'', is_syn=False), 1.5)
+
+
+@pytest.mark.timeout(5)
+def test_single_ack_for_multiple_packets(faker: Faker, helper: SocketTestHelper):
+    payloads = [faker.binary(111) for i in range(3)]
+    endpoints = helper.fake_endpoints()
+    socket = helper.create_connected_socket(*endpoints)
+    uid = faker.pyint()
+    messagess = [
+        {uid + i: Packet(*reversed(endpoints), i, 0, set(), payloads[i])} for i in range(3)
+    ]
+    for messages in messagess:
+        helper.feed_messages(messages)
+
+    helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0), (1, 0), (2, 0)}, b''), 1.5, 0.5)
+    helper.assert_no_packets_sent(1.5)
+
+
+@pytest.mark.timeout(5)
+def test_subsequent_acks_after_compressed(faker: Faker, helper: SocketTestHelper):
+    payloads = [faker.binary(111) for i in range(4)]
+    endpoints = helper.fake_endpoints()
+    socket = helper.create_connected_socket(*endpoints)
+    uid = faker.pyint()
+    messagess = [
+        {uid + i: Packet(*reversed(endpoints), i, 0, set(), payloads[i])} for i in range(4)
+    ]
+    for messages in messagess[:3]:
+        helper.feed_messages(messages)
+
+    helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0), (1, 0), (2, 0)}, b''), 1.5, 0.5)
+    helper.feed_messages(messagess[3])
+    helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0), (1, 0), (2, 0), (3, 0)}, b''), 1.5, 0.5)
+
+
+@pytest.mark.timeout(8)
+def test_ack_scheduled_flag_reset(faker: Faker, helper: SocketTestHelper):
+    """
+    This simulates the scenario below:
+    +0s - receive packet 0
+    +1s - send packet 1
+    +2s - receive packet 2, where packet 1 is acked
+    +3s - scheduled ack for 0 (if not optimized)
+    +5s - scheduled ack for 2 (if not optimized)
+    """
+    helper.mock_config['tom']['ATO'] = 3000
+    helper.mock_config['tom']['RTO'] = 10000
+    payloads = [faker.binary(111) for i in range(3)]
+    endpoints = helper.fake_endpoints()
+    socket = helper.create_connected_socket(*endpoints)
+    uid = faker.pyint()
+
+    start = time.time()
+    # +0s
+    helper.feed_messages({uid: Packet(*reversed(endpoints), 0, 0, set(), payloads[0])})
+    time.sleep(start + 1 - time.time())
+    # +1s
+    socket.send(payloads[1])
+    helper.assert_sent(Packet(*endpoints, 0, 0, {(0, 0)}, payloads[1]), 0.5)
+    time.sleep(start + 2 - time.time())
+    # +2s
+    helper.feed_messages({uid: Packet(*reversed(endpoints), 1, 0, {(0, 0)}, payloads[2])})
+    time.sleep(start + 3 - time.time())
+    # +3s
+    helper.assert_no_packets_sent(0.5)
+    time.sleep(start + 5 - time.time())
+    # +5s
+    helper.assert_sent(Packet(*endpoints, -1, 0, {(1, 0)}, b''), 0.5)

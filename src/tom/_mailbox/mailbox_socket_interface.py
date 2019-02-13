@@ -65,9 +65,7 @@ class MailboxSocketInterface(MailboxTasks):
                     self._socket_update_ready_status(sid, 'read', False)
             self._sockets[conn_sid] = conn_context
             self._connected_sockets[(conn_context.local_endpoint, conn_context.remote_endpoint)] = conn_sid
-            self._schedule_task(
-                src.config.config['tom']['ATO'] / 1000,
-                functools.partial(self._task_send_ack, conn_context, conn_context.next_seq))
+            self._schedule_ack(conn_context)
             return conn_sid
 
     def socket_send(self, sid: int, buf: bytes) -> int:
@@ -137,7 +135,5 @@ class MailboxSocketInterface(MailboxTasks):
                 for seq in context.pending_local:
                     self._task_transmit(sid, context, seq)
             elif context.to_ack:
-                self._schedule_task(
-                    src.config.config['tom']['ATO'] / 1000,
-                    functools.partial(self._task_send_ack, context, context.next_seq))
+                self._schedule_ack(context)
         return sid

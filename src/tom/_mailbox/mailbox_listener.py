@@ -1,5 +1,4 @@
 from typing import Dict, Any, Tuple
-import functools
 import email
 import os
 import threading
@@ -8,7 +7,6 @@ from .mailbox_tasks import MailboxTasks
 from .packet import PlainPacket
 from ..credential import Credential
 from . import socket_context, imapclient
-import src.config
 
 
 class MailboxListener(MailboxTasks):
@@ -94,11 +92,10 @@ class MailboxListener(MailboxTasks):
                         # no action for pure ack and duplicated packets
                         context.pending_remote[packet.seq] = packet.payload
                         context.to_ack.add((packet.seq, packet.attempt))
-                        self._schedule_task(
-                            src.config.config['tom']['ATO'] / 1000,
-                            functools.partial(self._task_send_ack, context, context.next_seq))
+                        self._schedule_ack(context)
                         if packet.payload and packet.seq == context.recv_cursor[0]:
                             self._socket_update_ready_status(sid, 'read', True)
+                        context.syn_seq = None
                         context.cv.notify_all()
                 return True
 

@@ -46,6 +46,7 @@ class Connected(Waitable, Epollable):
     attempts: DefaultDict[int, int]                             # seq -> next attempt
     to_ack: Set[Tuple[int, int]]                                # {(seq, attempt)}
     syn_seq: int
+    ack_scheduled: bool
     __STATE_KEYS: List[str] = [
         'local_endpoint',
         'remote_endpoint',
@@ -57,6 +58,7 @@ class Connected(Waitable, Epollable):
         'attempts',
         'to_ack',
         'syn_seq',
+        'ack_scheduled',
     ]
 
     def __init__(self, local_endpoint: Endpoint, remote_endpoint: Endpoint):
@@ -71,6 +73,7 @@ class Connected(Waitable, Epollable):
         self.attempts = defaultdict(int)
         self.to_ack = set()
         self.syn_seq = 0
+        self.ack_scheduled = False
 
     def __getstate__(self):
         return {
@@ -88,6 +91,7 @@ class Connected(Waitable, Epollable):
             self.syn_seq = min(self.pending_local.keys())
         else:
             self.syn_seq = self.next_seq
+        self.ack_scheduled = False
 
 
 class Listening(Waitable, Epollable):
