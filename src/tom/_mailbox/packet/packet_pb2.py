@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x0cpacket.proto\"(\n\x08PacketId\x12\x0b\n\x03seq\x18\x01 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\x04\"N\n\nPacketBody\x12\x15\n\x02id\x18\x01 \x01(\x0b\x32\t.PacketId\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\x12\x10\n\x07payload\x18\xe8\x07 \x01(\x0c\"9\n\x0bPlainPacket\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x1a\n\x04\x62ody\x18\xe8\x07 \x01(\x0b\x32\x0b.PacketBody\"T\n\x0cSecurePacket\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x0e\n\x06\x64h_pub\x18\x02 \x01(\x0c\x12\t\n\x01n\x18\x03 \x01(\x04\x12\n\n\x02pn\x18\x04 \x01(\x04\x12\r\n\x04\x62ody\x18\xe8\x07 \x01(\x0c\x62\x06proto3')
+  serialized_pb=_b('\n\x0cpacket.proto\"(\n\x08PacketId\x12\x0b\n\x03seq\x18\x01 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\x04\"<\n\x11PlainPacketHeader\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\"5\n\nPacketBody\x12\x15\n\x02id\x18\x01 \x01(\x0b\x32\t.PacketId\x12\x10\n\x07payload\x18\xe8\x07 \x01(\x0c\"M\n\x0bPlainPacket\x12\"\n\x06header\x18\x01 \x01(\x0b\x32\x12.PlainPacketHeader\x12\x1a\n\x04\x62ody\x18\xe8\x07 \x01(\x0b\x32\x0b.PacketBody\"d\n\x12SecurePacketHeader\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\x12\x0e\n\x06\x64h_pub\x18g \x01(\x0c\x12\t\n\x01n\x18h \x01(\x04\x12\n\n\x02pn\x18i \x01(\x04\"B\n\x0cSecurePacket\x12#\n\x06header\x18\x01 \x01(\x0b\x32\x13.SecurePacketHeader\x12\r\n\x04\x62ody\x18\xe8\x07 \x01(\x0c\x62\x06proto3')
 )
 
 
@@ -64,6 +64,44 @@ _PACKETID = _descriptor.Descriptor(
 )
 
 
+_PLAINPACKETHEADER = _descriptor.Descriptor(
+  name='PlainPacketHeader',
+  full_name='PlainPacketHeader',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='is_syn', full_name='PlainPacketHeader.is_syn', index=0,
+      number=1, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='acks', full_name='PlainPacketHeader.acks', index=1,
+      number=2, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=58,
+  serialized_end=118,
+)
+
+
 _PACKETBODY = _descriptor.Descriptor(
   name='PacketBody',
   full_name='PacketBody',
@@ -79,14 +117,7 @@ _PACKETBODY = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='acks', full_name='PacketBody.acks', index=1,
-      number=2, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='payload', full_name='PacketBody.payload', index=2,
+      name='payload', full_name='PacketBody.payload', index=1,
       number=1000, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -104,8 +135,8 @@ _PACKETBODY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=58,
-  serialized_end=136,
+  serialized_start=120,
+  serialized_end=173,
 )
 
 
@@ -117,9 +148,9 @@ _PLAINPACKET = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='is_syn', full_name='PlainPacket.is_syn', index=0,
-      number=1, type=8, cpp_type=7, label=1,
-      has_default_value=False, default_value=False,
+      name='header', full_name='PlainPacket.header', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
@@ -142,8 +173,67 @@ _PLAINPACKET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=138,
-  serialized_end=195,
+  serialized_start=175,
+  serialized_end=252,
+)
+
+
+_SECUREPACKETHEADER = _descriptor.Descriptor(
+  name='SecurePacketHeader',
+  full_name='SecurePacketHeader',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='is_syn', full_name='SecurePacketHeader.is_syn', index=0,
+      number=1, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='acks', full_name='SecurePacketHeader.acks', index=1,
+      number=2, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='dh_pub', full_name='SecurePacketHeader.dh_pub', index=2,
+      number=103, type=12, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b(""),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='n', full_name='SecurePacketHeader.n', index=3,
+      number=104, type=4, cpp_type=4, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='pn', full_name='SecurePacketHeader.pn', index=4,
+      number=105, type=4, cpp_type=4, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=254,
+  serialized_end=354,
 )
 
 
@@ -155,35 +245,14 @@ _SECUREPACKET = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='is_syn', full_name='SecurePacket.is_syn', index=0,
-      number=1, type=8, cpp_type=7, label=1,
-      has_default_value=False, default_value=False,
+      name='header', full_name='SecurePacket.header', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='dh_pub', full_name='SecurePacket.dh_pub', index=1,
-      number=2, type=12, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b(""),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='n', full_name='SecurePacket.n', index=2,
-      number=3, type=4, cpp_type=4, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='pn', full_name='SecurePacket.pn', index=3,
-      number=4, type=4, cpp_type=4, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='body', full_name='SecurePacket.body', index=4,
+      name='body', full_name='SecurePacket.body', index=1,
       number=1000, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -201,16 +270,21 @@ _SECUREPACKET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=197,
-  serialized_end=281,
+  serialized_start=356,
+  serialized_end=422,
 )
 
+_PLAINPACKETHEADER.fields_by_name['acks'].message_type = _PACKETID
 _PACKETBODY.fields_by_name['id'].message_type = _PACKETID
-_PACKETBODY.fields_by_name['acks'].message_type = _PACKETID
+_PLAINPACKET.fields_by_name['header'].message_type = _PLAINPACKETHEADER
 _PLAINPACKET.fields_by_name['body'].message_type = _PACKETBODY
+_SECUREPACKETHEADER.fields_by_name['acks'].message_type = _PACKETID
+_SECUREPACKET.fields_by_name['header'].message_type = _SECUREPACKETHEADER
 DESCRIPTOR.message_types_by_name['PacketId'] = _PACKETID
+DESCRIPTOR.message_types_by_name['PlainPacketHeader'] = _PLAINPACKETHEADER
 DESCRIPTOR.message_types_by_name['PacketBody'] = _PACKETBODY
 DESCRIPTOR.message_types_by_name['PlainPacket'] = _PLAINPACKET
+DESCRIPTOR.message_types_by_name['SecurePacketHeader'] = _SECUREPACKETHEADER
 DESCRIPTOR.message_types_by_name['SecurePacket'] = _SECUREPACKET
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -220,6 +294,13 @@ PacketId = _reflection.GeneratedProtocolMessageType('PacketId', (_message.Messag
   # @@protoc_insertion_point(class_scope:PacketId)
   ))
 _sym_db.RegisterMessage(PacketId)
+
+PlainPacketHeader = _reflection.GeneratedProtocolMessageType('PlainPacketHeader', (_message.Message,), dict(
+  DESCRIPTOR = _PLAINPACKETHEADER,
+  __module__ = 'packet_pb2'
+  # @@protoc_insertion_point(class_scope:PlainPacketHeader)
+  ))
+_sym_db.RegisterMessage(PlainPacketHeader)
 
 PacketBody = _reflection.GeneratedProtocolMessageType('PacketBody', (_message.Message,), dict(
   DESCRIPTOR = _PACKETBODY,
@@ -234,6 +315,13 @@ PlainPacket = _reflection.GeneratedProtocolMessageType('PlainPacket', (_message.
   # @@protoc_insertion_point(class_scope:PlainPacket)
   ))
 _sym_db.RegisterMessage(PlainPacket)
+
+SecurePacketHeader = _reflection.GeneratedProtocolMessageType('SecurePacketHeader', (_message.Message,), dict(
+  DESCRIPTOR = _SECUREPACKETHEADER,
+  __module__ = 'packet_pb2'
+  # @@protoc_insertion_point(class_scope:SecurePacketHeader)
+  ))
+_sym_db.RegisterMessage(SecurePacketHeader)
 
 SecurePacket = _reflection.GeneratedProtocolMessageType('SecurePacket', (_message.Message,), dict(
   DESCRIPTOR = _SECUREPACKET,

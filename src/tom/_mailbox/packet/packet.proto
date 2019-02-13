@@ -5,21 +5,30 @@ message PacketId {
     uint64 attempt = 2;
 }
 
+message PlainPacketHeader {
+    bool is_syn = 1;
+    repeated PacketId acks = 2;
+}
+
 message PacketBody {
     PacketId id = 1;
-    repeated PacketId acks = 2;
     bytes payload = 1000;
 }
 
 message PlainPacket {
-    bool is_syn = 1;
+    PlainPacketHeader header = 1;
     PacketBody body = 1000;
 }
 
-message SecurePacket {
+message SecurePacketHeader {
     bool is_syn = 1;
-    bytes dh_pub = 2;
-    uint64 n = 3;
-    uint64 pn = 4;
+    repeated PacketId acks = 2;
+    bytes dh_pub = 103;
+    uint64 n = 104;
+    uint64 pn = 105;
+}
+
+message SecurePacket {
+    SecurePacketHeader header = 1;
     bytes body = 1000;
 }

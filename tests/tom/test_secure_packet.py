@@ -18,7 +18,8 @@ def packet(faker: Faker) -> SecurePacket:
     dr_header = doubleratchet.header.Header(dh_pub, n, pn)
     body = faker.binary(111)
     is_syn = faker.pybool()
-    return SecurePacket(from_, to, dr_header, body, is_syn)
+    acks = set(zip(faker.pylist(10, False, int), faker.pylist(10, False, int)))
+    return SecurePacket(from_, to, acks, dr_header, body, is_syn)
 
 
 @pytest.fixture()
@@ -82,6 +83,7 @@ def test_encrypt(faker: Faker):
     plain_packet_stub.is_syn = Mock()
     plain_packet_stub.from_ = Mock()
     plain_packet_stub.to = Mock()
+    plain_packet_stub.acks = set(zip(faker.pylist(10, False, int), faker.pylist(10, False, int)))
     cipher_stub = {
         'header': Mock(),
         'ciphertext': faker.binary(111),
@@ -96,6 +98,7 @@ def test_encrypt(faker: Faker):
     assert packet.from_ == plain_packet_stub.from_
     assert packet.to == plain_packet_stub.to
     assert packet.is_syn == plain_packet_stub.is_syn
+    assert packet.acks == plain_packet_stub.acks
     assert packet.body == cipher_stub['ciphertext']
 
 
@@ -109,7 +112,8 @@ def test_decrypt(faker: Faker, packet: SecurePacket, mock_plain_packet_pb: Magic
 
     ret = packet.decrypt(ratchet_stub)
 
-    assert plain_packet_pb_stub.is_syn == packet.is_syn
+    assert plain_packet_pb_stub.header.is_syn == packet.is_syn
+    assert plain_packet_pb_stub.header.acks == packet.acks
     plain_packet_pb_stub.body.ParseFromString.called_once_with(cleartext_stub)
     mock_plain_packet.from_pb.assert_called_once_with((packet.from_, packet.to), plain_packet_pb_stub)
     assert ret == mock_plain_packet.from_pb.return_value

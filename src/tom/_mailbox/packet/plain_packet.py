@@ -33,10 +33,10 @@ class PlainPacket:
 
     @classmethod
     def from_pb(cls, endpoints: Tuple[Endpoint, Endpoint],  packet: packet_pb2.PlainPacket) -> PlainPacket:
-        is_syn = packet.is_syn
+        is_syn = packet.header.is_syn
+        acks = set((id.seq, id.attempt) for id in packet.header.acks)
         seq = packet.body.id.seq
         attempt = packet.body.id.attempt
-        acks = set((id.seq, id.attempt) for id in packet.body.acks)
         payload = packet.body.payload
         return cls(endpoints[0], endpoints[1], seq, attempt, acks, payload, is_syn)
 
@@ -50,15 +50,15 @@ class PlainPacket:
 
     def to_pb(self) -> packet_pb2.PlainPacket:
         packet = packet_pb2.PlainPacket()
-        packet.is_syn = self.is_syn
-        packet.body.id.seq = self.seq
-        packet.body.id.attempt = self.attempt
+        packet.header.is_syn = self.is_syn
         acks = []
         for seq, attempt in self.acks:
             id = packet_pb2.PacketId()
             id.seq = seq
             id.attempt = attempt
             acks.append(id)
-        packet.body.acks.extend(acks)
+        packet.header.acks.extend(acks)
+        packet.body.id.seq = self.seq
+        packet.body.id.attempt = self.attempt
         packet.body.payload = self.payload
         return packet
