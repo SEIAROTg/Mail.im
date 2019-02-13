@@ -93,7 +93,12 @@ class MailboxListener(MailboxTasks):
                         context.pending_remote[packet.seq] = packet.payload
                         context.to_ack.add((packet.seq, packet.attempt))
                         self._schedule_ack(context)
-                        if packet.payload and packet.seq == context.recv_cursor[0]:
+                        seq = context.recv_cursor[0]
+                        while context.pending_remote.get(seq) == b'':
+                            del context.pending_remote[seq]
+                            seq += 1
+                        context.recv_cursor = (seq, 0)
+                        if context.pending_remote.get(seq):
                             self._socket_update_ready_status(sid, 'read', True)
                         context.syn_seq = None
                         context.cv.notify_all()

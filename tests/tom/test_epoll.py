@@ -87,9 +87,9 @@ def test_read_recv_order(faker: Faker, helper: SocketTestHelper):
     epoll = helper.create_epoll()
     epoll.add({socket}, {socket})
 
-    helper.defer(lambda: helper.feed_messages({
+    helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 1, 0, set(), payload),
-    }), 0.5)
+    })
     rrset, rxset = epoll.wait(timeout=0.5)
 
     assert not rrset
@@ -103,12 +103,52 @@ def test_read_recv_empty_packet(faker: Faker, helper: SocketTestHelper):
     epoll = helper.create_epoll()
     epoll.add({socket}, {socket})
 
+    helper.feed_messages({
+        faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), b''),
+    })
+    rrset, rxset = epoll.wait(timeout=0.5)
+
+    assert not rrset
+    assert not rxset
+
+
+@pytest.mark.timeout(5)
+def test_read_recv_empty_packet_followed_by_non_empty_packets(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    socket = helper.create_connected_socket(*endpoints)
+    epoll = helper.create_epoll()
+    epoll.add({socket}, {socket})
+
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), b''),
     }), 0.5)
-    rrset, rxset = epoll.wait(timeout=0)
+    helper.defer(lambda: helper.feed_messages({
+        faker.pyint(): Packet(*reversed(endpoints), 1, 0, set(), payload),
+    }), 1)
+    rrset, rxset = epoll.wait()
 
-    assert not rrset
+    assert rrset == {socket}
+    assert not rxset
+
+
+@pytest.mark.timeout(5)
+def test_read_recv_empty_packet_followed_by_non_empty_packets_reversed(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    socket = helper.create_connected_socket(*endpoints)
+    epoll = helper.create_epoll()
+    epoll.add({socket}, {socket})
+
+    helper.defer(lambda: helper.feed_messages({
+        faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), b''),
+    }), 1)
+    helper.defer(lambda: helper.feed_messages({
+        faker.pyint(): Packet(*reversed(endpoints), 1, 0, set(), payload),
+    }), 0.5)
+    rrset, rxset = epoll.wait()
+
+    assert rrset == {socket}
     assert not rxset
 
 
