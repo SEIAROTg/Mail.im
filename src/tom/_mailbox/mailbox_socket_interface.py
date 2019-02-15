@@ -76,7 +76,7 @@ class MailboxSocketInterface(MailboxTasks):
             seq = context.next_seq
             context.next_seq += 1
             context.pending_local[seq] = buf
-            self._task_transmit(sid, context, seq)
+        self._task_transmit(sid, context, seq)
         return len(buf)
 
     def socket_recv(self, sid: int, max_size: int, timeout: Optional[float] = None) -> bytes:
@@ -130,7 +130,7 @@ class MailboxSocketInterface(MailboxTasks):
             self._sockets[sid] = context
             if context.pending_local:
                 for seq in context.pending_local:
-                    self._task_transmit(sid, context, seq)
+                    self._schedule_task(0, functools.partial(self._task_transmit, sid, context, seq))
             elif context.to_ack:
                 self._schedule_ack(context)
         return sid

@@ -14,8 +14,9 @@ import src.config
 
 class MailboxTasks(MailboxBase):
     __transport: smtplib.SMTP
+    __mutex_transport: threading.RLock
     __scheduled_tasks: List[Tuple[float, Callable]]
-    __cv_timer: threading.Condition
+    __cv_tasks: threading.Condition
     __thread_timer: threading.Thread
     __closed: bool = False
 
@@ -30,8 +31,9 @@ class MailboxTasks(MailboxBase):
     def __init__(self, smtp: Credential):
         super().__init__()
         self.__transport = self.__init_smtp(smtp)
+        self.__mutex_transport = threading.RLock()
         self.__scheduled_tasks = []
-        self.__cv_timer = threading.Condition(self._mutex)
+        self.__cv_tasks = threading.Condition()
         self.__thread_timer = threading.Thread(target=self.__timer)
         self.__thread_timer.start()
 
@@ -39,21 +41,21 @@ class MailboxTasks(MailboxBase):
         self.__thread_timer.join()
 
     def close(self):
-        with self.__cv_timer:
+        with self.__cv_tasks:
             self.__closed = True
-            self.__cv_timer.notify_all()
+            self.__cv_tasks.notify_all()
         self.__transport.close()
 
     def __timer(self):
         while True:
-            with self.__cv_timer:
+            with self.__cv_tasks:
                 if self.__closed:
                    break
                 while not self.__closed and (not self.__scheduled_tasks or self.__scheduled_tasks[0][0] > time.time()):
                     if self.__scheduled_tasks:
-                        self.__cv_timer.wait(self.__scheduled_tasks[0][0] - time.time())
+                        self.__cv_tasks.wait(self.__scheduled_tasks[0][0] - time.time())
                     else:
-                        self.__cv_timer.wait()
+                        self.__cv_tasks.wait()
                 if self.__closed:
                     break
                 _, task = heapq.heappop(self.__scheduled_tasks)
@@ -70,9 +72,9 @@ class MailboxTasks(MailboxBase):
         :param delay: the scheduled time to execute in seconds, counting from current time.
         :param task: the function to execute.
         """
-        with self.__cv_timer:
+        with self.__cv_tasks:
             heapq.heappush(self.__scheduled_tasks, (time.time() + delay, task))
-            self.__cv_timer.notify_all()
+            self.__cv_tasks.notify_all()
 
     def _schedule_ack(self, context: socket_context.Connected):
         with context.cv:

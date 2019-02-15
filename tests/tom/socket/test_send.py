@@ -66,3 +66,15 @@ def test_max_attempts(faker: Faker, helper: SocketTestHelper):
     with pytest.raises(Exception) as execinfo:
         socket.recv(100)
     assert execinfo.match('socket already closed')
+
+
+@pytest.mark.timeout(5)
+def test_many_packets(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    payload = faker.binary(111)
+    uid = faker.pyint()
+    socket = helper.create_connected_socket(*endpoints)
+
+    for i in range(5000):
+        socket.send(payload)
+        helper.feed_messages({uid + i: Packet(*reversed(endpoints), -1, 0, {(i, 0)}, b'')})
