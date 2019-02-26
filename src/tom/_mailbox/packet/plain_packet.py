@@ -5,12 +5,12 @@ import email.message
 from email.utils import parseaddr, formataddr
 from email.mime.application import MIMEApplication
 from ... import Endpoint
-from . import packet_pb2
+from . import packet_pb2, Packet
 import src.config
 
 
 @dataclass()
-class PlainPacket:
+class PlainPacket(Packet):
     from_: Endpoint
     to: Endpoint
     seq: int

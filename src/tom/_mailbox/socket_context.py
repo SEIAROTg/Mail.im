@@ -1,6 +1,8 @@
-from typing import Dict, Tuple, Set, DefaultDict, Deque, List
+from typing import Dict, Tuple, Set, DefaultDict, Deque, List, Optional
 from collections import defaultdict, deque
 import threading
+from src.crypto.doubleratchet import DoubleRatchet
+from .packet import Packet
 from .. import Endpoint
 
 
@@ -40,7 +42,7 @@ class Connected(Waitable, Epollable):
     remote_endpoint: Endpoint
     next_seq: int
     recv_cursor: Tuple[int, int]                                # (seq, offset)
-    pending_local: Dict[int, bytes]                             # seq -> payload
+    pending_local: Dict[int, Packet]                            # seq -> payload
     pending_remote: Dict[int, bytes]                            # seq -> payload
     sent_acks: Dict[Tuple[int, int], Set[Tuple[int, int]]]      # (seq, attempt) -> {(seq, attempt)}
     attempts: DefaultDict[int, int]                             # seq -> next attempt
@@ -72,26 +74,52 @@ class Connected(Waitable, Epollable):
         self.sent_acks = {}
         self.attempts = defaultdict(int)
         self.to_ack = set()
-        self.syn_seq = 0
+        self.syn_seq = None
         self.ack_scheduled = False
 
     def __getstate__(self):
         return {
             k: v
-            for k, v in self.__dict__.items() if k in Connected.__STATE_KEYS
+            for k, v in self.__dict__.items() if k in self.__class__.__STATE_KEYS
         }
 
     def __setstate__(self, state):
         super().__init__()
         self.__dict__.update({
             k: v
-            for k, v in state.items() if k in Connected.__STATE_KEYS
+            for k, v in state.items() if k in self.__class__.__STATE_KEYS
         })
         if self.pending_local:
             self.syn_seq = min(self.pending_local.keys())
         else:
             self.syn_seq = self.next_seq
         self.ack_scheduled = False
+
+
+class SecureConnected(Connected):
+    handshaked: bool
+    ratchet: DoubleRatchet
+
+    def __init__(
+            self,
+            local_endpoint: Endpoint,
+            remote_endpoint: Endpoint,
+            own_key: Optional[bytes] = None,
+            other_pub: Optional[bytes] = None):
+        super().__init__(local_endpoint, remote_endpoint)
+        self.handshaked = False
+        self.ratchet = DoubleRatchet(own_key, other_pub)
+
+    def __getstate__(self):
+        state_self = (self.handshaked, self.ratchet.serialize())
+        state_base = super().__getstate__()
+        return state_base, state_self
+
+    def __setstate__(self, state):
+        state_base, state_self = state
+        super().__setstate__(state_base)
+        self.handshaked = state_self[0]
+        self.ratchet = DoubleRatchet.fromSerialized(state_self[1])
 
 
 class Listening(Waitable, Epollable):

@@ -1,6 +1,7 @@
 import time
+from unittest.mock import Mock, call
 import pytest
-from ..socket_test_helper import SocketTestHelper
+from ...socket_test_helper import SocketTestHelper
 from faker import Faker
 from src.tom import Endpoint
 from src.tom._mailbox.packet import PlainPacket as Packet
@@ -26,7 +27,7 @@ def test_only_syn(faker: Faker, helper: SocketTestHelper):
     listening_socket = helper.create_listening_socket(endpoints[1])
 
     helper.feed_messages({faker.pyint(): Packet(*endpoints, 0, 0, set(), payload, is_syn=False)})
-    socket = listening_socket.accept(0.5)
+    socket = listening_socket.accept(timeout=0.5)
     assert socket is None
 
 
@@ -107,3 +108,23 @@ def test_defer_ack(faker: Faker, helper: SocketTestHelper):
     helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0)}, b''), 1.5, 0.5)
     data = socket.recv_exact(111)
     assert data == payload
+
+
+@pytest.mark.timeout(5)
+def test_should_accept(faker: Faker, helper: SocketTestHelper):
+    local_endpoint = helper.fake_endpoint()
+    payloads = [faker.binary(111) for i in range(3)]
+    remote_endpoints = [helper.fake_endpoint() for i in range(3)]
+    uid = faker.pyint()
+    should_accept = Mock(side_effect=[False, False, True])
+    listening_socket = helper.create_listening_socket(local_endpoint)
+
+    helper.feed_messages({
+        uid+i: Packet(remote_endpoints[i], local_endpoint, 0, 0, set(), payloads[i], is_syn=True) for i in range(3)
+    })
+    socket = listening_socket.accept(should_accept)
+    assert socket.recv_exact(111) == payloads[2]
+    assert not listening_socket.accept(timeout=0)
+    should_accept.assert_has_calls([
+        call(local_endpoint, remote_endpoints[i], False) for i in range(3)
+    ])

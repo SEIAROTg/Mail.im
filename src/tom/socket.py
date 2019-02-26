@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from typing import Optional, List, Tuple
+from typing import Optional, Callable
 from . import Mailbox, Endpoint
 
 
@@ -40,14 +40,21 @@ class Socket:
         """
         self.__mailbox.socket_close(self.__id)
 
-    def connect(self, local_endpoint: Endpoint, remote_endpoint: Endpoint):
+    def connect(
+            self,
+            local_endpoint: Endpoint,
+            remote_endpoint: Endpoint,
+            secure: bool = False,
+            timeout: Optional[float] = None):
         """
         Establish connection from a local endpoint to remote endpoint. The socket must not be connected or bound.
 
         :param local_endpoint: a complete `Endpoint` object as local endpoint.
         :param remote_endpoint: a complete `Endpoint` object as remote endpoint.
+        :param secure: a bool indicating whether to enable end-to-end encryption.
+        :param timeout: handshake timeout. Only applicable to secure connections.
         """
-        self.__mailbox.socket_connect(self.__id, local_endpoint, remote_endpoint)
+        self.__mailbox.socket_connect(self.__id, local_endpoint, remote_endpoint, secure, timeout)
 
     def listen(self, local_endpoint: Endpoint):
         """
@@ -57,16 +64,22 @@ class Socket:
         """
         self.__mailbox.socket_listen(self.__id, local_endpoint)
 
-    def accept(self, timeout: float = None) -> Optional[Socket]:
+    def accept(
+            self,
+            should_accept: Optional[Callable[[Endpoint, Endpoint, bool], bool]] = None,
+            timeout: Optional[float] = None
+    ) -> Optional[Socket]:
         """
         Accept an incoming connection. The socket must be bound and listening.
 
-        :param timeout: operation timeout in seconds.
+        :param should_accept: a function that decides whether to accept the connection. This function will be given
+        three arguments: `local_endpoint: Endpoint`, `remote_endpoint: Endpoint` and `secure: bool`. The connection
+        will be accepted iff this function returns `True`.
+        :param timeout: operation timeout in seconds. Omit to wait indefinitely.
         :return: an connected socket.
         """
-
-        id = self.__mailbox.socket_accept(self.__id, timeout)
-        if id is None:  # timeout
+        id = self.__mailbox.socket_accept(self.__id, should_accept, timeout)
+        if id is None:
             return None
         return Socket(self.__mailbox, id)
 
@@ -85,7 +98,7 @@ class Socket:
         This function will block until there is incoming data to receive or the socket is closed.
 
         :param max_size: the **maximum** amount of data to be received.
-        :param timeout: operation timeout in seconds.
+        :param timeout: operation timeout in seconds. Omit to wait indefinitely.
         :return: the data received.
         """
         return self.__mailbox.socket_recv(self.__id, max_size, timeout)
@@ -96,7 +109,7 @@ class Socket:
         This function will block until `size` bytes of data are received or the socket is closed.
 
         :param size: the **exact** amount of data to be received.
-        :param timeout: operation timeout in seconds.
+        :param timeout: operation timeout in seconds. Omit to wait indefinitely.
         :return: the data received.
         """
         ret = b''

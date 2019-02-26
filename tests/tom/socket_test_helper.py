@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Deque, Optional, Callable, Any, List
+from typing import Dict, Tuple, Deque, Optional, Callable, Any, List, Type
 from unittest.mock import patch, MagicMock, Mock, _patch
 from collections import deque
 import time
@@ -6,15 +6,24 @@ import threading
 from imapclient import SEEN
 from imapclient.response_types import Envelope, Address
 from faker import Faker
+import doubleratchet.header
 from src.tom import Mailbox, Credential, Endpoint, Socket, Epoll
-from src.tom._mailbox.packet import PlainPacket as Packet
+from src.tom._mailbox.packet import Packet, PlainPacket, SecurePacket
+from src.crypto.doubleratchet import KeyPair
+
+
+def packet_from_message_stub(cls: Type[Packet]):
+    def stub(packet: Packet):
+        if not isinstance(packet, cls):
+            raise Exception('invalid packet')
+        return packet
+    return stub
 
 
 class SocketTestHelper:
     __mutex: threading.RLock
     __sem_send: threading.Semaphore
     __cv_listen: threading.Condition
-    __thread_mailbox: threading.Thread
 
     __faker: Faker
     __messages: Dict[int, Packet]
@@ -54,34 +63,23 @@ class SocketTestHelper:
         self.mock_store.add_flags.side_effect = self.__add_flags_stub
         self.mock_listener = MagicMock()
         self.mock_listener.idle_check.side_effect = self.__idle_check_stub
-        patch_transport = patch('smtplib.SMTP')
-        self.mock_transport = patch_transport.start()
-        self.mock_transport.return_value.sendmail.side_effect = self.__sendmail_stub
-        self.mock_packet = MagicMock()
-        self.mock_packet.from_message.side_effect = lambda x: x
-        self.mock_packet.side_effect =\
-            lambda *args, **kwargs: Mock(to_message=lambda: Mock(as_bytes=lambda: Packet(*args, **kwargs)))
-        patch_packet0 = patch('src.tom._mailbox.mailbox_listener.PlainPacket', self.mock_packet)
-        patch_packet1 = patch('src.tom._mailbox.mailbox_tasks.PlainPacket', self.mock_packet)
-        patch_packet0.start()
-        patch_packet1.start()
-        patch_imapclient = patch('src.tom._mailbox.imapclient.IMAPClient')
-        self.__mock_imapclient = patch_imapclient.start()
-        self.__mock_imapclient.side_effect = [self.mock_store, self.mock_listener]
-        patch_message_from_bytes = patch('email.message_from_bytes')
-        self.__mock_message_from_bytes = patch_message_from_bytes.start()
-        self.__mock_message_from_bytes.side_effect = lambda x: x
-        self.mailbox = Mailbox(self.__fake_credential(), self.__fake_credential())
         self.__patches = [
             patch_config,
-            patch_transport,
-            patch_packet0,
-            patch_packet1,
-            patch_imapclient,
-            patch_message_from_bytes]
-
-        self.__thread_mailbox = threading.Thread(target=self.mailbox.join)
-        self.__thread_mailbox.start()
+            patch('smtplib.SMTP', **{'return_value.sendmail.side_effect': self.__sendmail_stub}),
+            patch('src.tom._mailbox.imapclient.IMAPClient', side_effect=[self.mock_store, self.mock_listener]),
+            patch.object(PlainPacket, 'from_message', packet_from_message_stub(PlainPacket)),
+            patch.object(PlainPacket, 'to_message', lambda x: Mock(as_bytes=lambda: x)),
+            patch.object(SecurePacket, 'from_message', packet_from_message_stub(SecurePacket)),
+            patch.object(SecurePacket, 'to_message', lambda x: Mock(as_bytes=lambda: x)),
+            patch.object(SecurePacket, 'decrypt', lambda x, r: x.body),
+            patch.object(SecurePacket, 'encrypt',
+                         lambda x, r: SecurePacket(x.from_, x.to, set(x.acks), self.fake_dr_header(), x, x.is_syn)),
+            patch.object(KeyPair, 'generate', lambda: KeyPair()),
+            patch('email.message_from_bytes', lambda x: x),
+        ]
+        for patch_ in self.__patches:
+            patch_.start()
+        self.mailbox = Mailbox(self.__fake_credential(), self.__fake_credential())
 
     def __del__(self):
         self.close()
@@ -91,9 +89,9 @@ class SocketTestHelper:
             self.__closed = True
             self.__cv_listen.notify_all()
         self.mailbox.close()
-        self.__thread_mailbox.join()
-        for patch in self.__patches:
-            patch.stop()
+        self.mailbox.join()
+        for patch_ in self.__patches:
+            patch_.stop()
         self.__patches = []
 
     def create_connected_socket(
@@ -104,6 +102,19 @@ class SocketTestHelper:
         local_endpoint = local_endpoint or self.fake_endpoint()
         remote_endpoint = remote_endpoint or self.fake_endpoint()
         socket.connect(local_endpoint, remote_endpoint)
+        return socket
+
+    def create_secure_connected_socket(
+            self,
+            local_endpoint: Optional[Endpoint] = None,
+            remote_endpoint: Optional[Endpoint] = None,
+            timeout: Optional[float] = None):
+        socket = Socket(self.mailbox)
+        local_endpoint = local_endpoint or self.fake_endpoint()
+        remote_endpoint = remote_endpoint or self.fake_endpoint()
+        socket.connect(local_endpoint, remote_endpoint, secure=True, timeout=timeout)
+        self.assert_sent(
+            SecurePacket(local_endpoint, remote_endpoint, set(), self.fake_dr_header(), b'', is_syn=True), 0.5)
         return socket
 
     def create_listening_socket(self, local_endpoint: Optional[Endpoint] = None):
@@ -136,6 +147,9 @@ class SocketTestHelper:
         assert self.__sem_send.acquire(timeout=timeout), 'packet has not been sent in time'
         with self.__mutex:
             sent_packet = self.__send_queue.popleft()
+            if sent_packet != packet:
+                a = 1
+                b = 2
             assert sent_packet == packet, 'packet has not been sent in time'
             assert not min_time or start + min_time < time.time(), 'packet was sent too early'
 
@@ -156,6 +170,12 @@ class SocketTestHelper:
         with self.__mutex:
             self.__send_queue.append(packet)
         self.__sem_send.release()
+        if isinstance(packet, SecurePacket) and packet.body == b'':  # is handshake
+            dh_pub = self.__faker.binary(32)
+            header = doubleratchet.header.Header(dh_pub, 0, 0)
+            plain = PlainPacket(packet.to, packet.from_, 0, 0, set(), b'')
+            response = SecurePacket(packet.to, packet.from_, set(), header, plain)
+            self.feed_messages({-1:  response})
 
     def __idle_check_stub(self, timeout=None, selfpipe=None):
         with self.__cv_listen:
@@ -197,6 +217,9 @@ class SocketTestHelper:
 
     def fake_endpoints(self) -> Tuple[Endpoint, Endpoint]:
         return self.fake_endpoint(), self.fake_endpoint()
+
+    def fake_dr_header(self) -> doubleratchet.header.Header:
+        return doubleratchet.header.Header(None, 0, 0)
 
     @staticmethod
     def __make_envelope(packet: Packet) -> Envelope:

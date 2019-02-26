@@ -1,7 +1,7 @@
 import pytest
 from faker import Faker
 from src.tom._mailbox.packet import PlainPacket as Packet
-from ..socket_test_helper import SocketTestHelper
+from ...socket_test_helper import SocketTestHelper
 
 
 def test_connected(helper: SocketTestHelper):

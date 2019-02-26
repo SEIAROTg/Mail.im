@@ -1,5 +1,5 @@
 import pytest
-from ..socket_test_helper import SocketTestHelper
+from ...socket_test_helper import SocketTestHelper
 from faker import Faker
 from unittest.mock import call
 import imapclient
@@ -210,17 +210,19 @@ def test_not_connected(faker: Faker, helper: SocketTestHelper):
 
 @pytest.mark.timeout(5)
 def test_invalid_packets(faker: Faker, helper: SocketTestHelper):
+    def from_message_stub():
+        raise Exception('invalid packet')
     endpoints = helper.fake_endpoints()
     payload = faker.binary(111)
     uid = faker.pyint()
+    packet = Packet(*reversed(endpoints), 0, 0, set(), payload)
+    packet.from_message = from_message_stub
     messages = {
-        uid: Packet(*reversed(endpoints), 0, 0, set(), payload),
+        uid: packet,
     }
-    helper.mock_packet.from_message.side_effect = Exception('invalid packet')
 
     helper.feed_messages(messages)
     helper.close()
-
     helper.mock_store.add_flags.assert_not_called()
 
 
@@ -257,6 +259,17 @@ def test_ack(faker: Faker, helper: SocketTestHelper):
 
     helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload)})
     helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0)}, b''), 1.5, 0.5)
+
+
+@pytest.mark.timeout(5)
+def test_ack_no_retransmit(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    socket = helper.create_connected_socket(*endpoints)
+
+    helper.feed_messages({faker.pyint(): Packet(*reversed(endpoints), 0, 0, set(), payload)})
+    helper.assert_sent(Packet(*endpoints, -1, 0, {(0, 0)}, b''), 1.5, 0.5)
+    helper.assert_no_packets_sent(1.5)
 
 
 @pytest.mark.timeout(5)

@@ -5,24 +5,21 @@ import email.message
 from email.utils import parseaddr, formataddr
 from email.mime.application import MIMEApplication
 from ... import Endpoint
-from . import packet_pb2, PlainPacket
+from . import packet_pb2, Packet, PlainPacket
 import doubleratchet.header
 from src.crypto.doubleratchet import DoubleRatchet
 import src.config
 
 
 @dataclass()
-class SecurePacket:
-    from_: Endpoint
-    to: Endpoint
+class SecurePacket(Packet):
     acks: Set[Tuple[int, int]]  # {(seq, attempt)}
     dr_header: doubleratchet.header.Header
     body: bytes
     is_syn: bool = False
 
     def __eq__(self, other: SecurePacket):
-        return (self.from_ == other.from_
-                and self.to == other.to
+        return (super().__eq__(other)
                 and self.acks == other.acks
                 and self.dr_header.dh_pub == self.dr_header.dh_pub
                 and self.dr_header.n == self.dr_header.n
@@ -76,6 +73,9 @@ class SecurePacket:
 
     @classmethod
     def encrypt(cls, plain_packet: PlainPacket, ratchet: DoubleRatchet) -> SecurePacket:
+        if plain_packet.seq == -1:
+            header = doubleratchet.header.Header(None, 0, 0)
+            return cls(plain_packet.from_, plain_packet.to, set(plain_packet.acks), header, b'', plain_packet.is_syn)
         body = plain_packet.to_pb().body
         cipher = ratchet.encryptMessage(body.SerializeToString())
         return cls(
@@ -87,6 +87,8 @@ class SecurePacket:
             plain_packet.is_syn)
 
     def decrypt(self, ratchet: DoubleRatchet) -> PlainPacket:
+        if not self.body:
+            return PlainPacket(self.from_, self.to, -1, 0, set(self.acks), b'', self.is_syn)
         cleartext = ratchet.decryptMessage(self.body, self.dr_header)
         packet = packet_pb2.PlainPacket()
         packet.header.is_syn = self.is_syn

@@ -3,7 +3,7 @@ import time
 from faker import Faker
 from src.tom import Socket
 from src.tom._mailbox.packet import PlainPacket as Packet
-from ..socket_test_helper import SocketTestHelper
+from ...socket_test_helper import SocketTestHelper
 
 
 def test_simple(helper: SocketTestHelper):
@@ -64,7 +64,7 @@ def test_recv_cursor(faker: Faker, helper: SocketTestHelper):
         i: Packet(*reversed(endpoints), i, 0, set(), payload) for i in range(100)
     }
     helper.feed_messages(messages)
-    time.sleep(1.5)
+    time.sleep(0.5)
     socket.recv_exact(111 * 40 + 50)
     socket.shutdown()
     dump = socket.dump()

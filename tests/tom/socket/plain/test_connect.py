@@ -1,5 +1,5 @@
 import pytest
-from ..socket_test_helper import SocketTestHelper
+from ...socket_test_helper import SocketTestHelper
 
 
 def test_simple(helper: SocketTestHelper):

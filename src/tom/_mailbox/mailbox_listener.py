@@ -1,10 +1,11 @@
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
+import contextlib
 import email
 import os
 import threading
 import imapclient.response_types
 from .mailbox_tasks import MailboxTasks
-from .packet import PlainPacket
+from .packet import Packet, PlainPacket, SecurePacket
 from ..credential import Credential
 from . import socket_context, imapclient
 
@@ -68,67 +69,109 @@ class MailboxListener(MailboxTasks):
         messages = self.__store.fetch(uids, ['BODY.PEEK[]'])
         seens = []
         for uid, message in messages.items():
-            try:
-                if self.__process_incoming_packet(message):
-                    seens.append(uid)
-            except Exception as e:
-                # ignore invalid packets
-                pass
+            if self.__try_process_packet(message):
+                seens.append(uid)
         if seens:
             self.__store.add_flags(seens, [imapclient.SEEN])
 
-    def __process_incoming_packet(self, message: Dict[bytes, Any]) -> bool:
-        msg = email.message_from_bytes(message[b'BODY[]'])
-        packet = PlainPacket.from_message(msg)
-
+    def __try_process_packet_connected(self, packet: Packet, secure: bool) -> bool:
         with self._mutex:
             sid = self._connected_sockets.get((packet.to, packet.from_))
-            if sid is not None:  # connected socket
-                context: socket_context.Connected = self._sockets[sid]
-                with context.cv:
-                    for ack_seq, ack_attempt in packet.acks:
-                        self.__process_ack(sid, ack_seq, ack_attempt)
-                    if packet.seq != -1 and packet.seq >= context.recv_cursor[0]:
-                        # no action for pure ack and duplicated packets
-                        context.pending_remote[packet.seq] = packet.payload
-                        context.to_ack.add((packet.seq, packet.attempt))
-                        self._schedule_ack(context)
-                        seq = context.recv_cursor[0]
-                        while context.pending_remote.get(seq) == b'':
-                            del context.pending_remote[seq]
-                            seq += 1
-                        context.recv_cursor = (seq, 0)
-                        if context.pending_remote.get(seq):
-                            self._socket_update_ready_status(sid, 'read', True)
-                        context.syn_seq = None
-                        context.cv.notify_all()
-                return True
+            try:
+                context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
+            except Exception:
+                return False
+            if secure != isinstance(context, socket_context.SecureConnected):
+                return False
+            with context.cv:
+                if secure:
+                    packet: SecurePacket
+                    context: socket_context.SecureConnected
+                    packet = packet.decrypt(context.ratchet)
+                packet: PlainPacket
+                for ack_seq, ack_attempt in packet.acks:
+                    self.__process_ack(sid, ack_seq, ack_attempt)
+                if packet.seq != -1 and packet.seq >= context.recv_cursor[0]:
+                    # no action for pure ack and duplicated packets
+                    context.pending_remote[packet.seq] = packet.payload
+                    context.to_ack.add((packet.seq, packet.attempt))
+                    self._schedule_ack(sid, context)
 
+                    seq = context.recv_cursor[0]
+                    while context.pending_remote.get(seq) == b'':
+                        del context.pending_remote[seq]
+                        seq += 1
+                    context.recv_cursor = (seq, 0)
+                    if context.pending_remote.get(seq):
+                        self._socket_update_ready_status(sid, 'read', True)
+                    elif secure and packet.seq == 0:  # handshake response
+                        del context.attempts[0]
+                        del context.pending_local[0]
+                    context.syn_seq = None
+                    context.cv.notify_all()
+            return True
+
+    def __try_process_packet_listening(self, packet: Packet, secure: bool) -> bool:
+        with self._mutex:
             sid = next((sid
                         for sid, listening_endpoint in self._listening_sockets.items()
                         if listening_endpoint.matches(packet.to)), None)
-            if sid is not None:  # listening socket
-                context: socket_context.Listening = self._sockets[sid]
-                with context.cv:
-                    conn_sid = context.connected_sockets.get((packet.to, packet.from_))
-                    if conn_sid: # existing pending connection
-                        conn_context = context.sockets[conn_sid]
-                    elif packet.is_syn:  # new pending connection
-                        conn_sid = self._socket_allocate_id()
-                        conn_context = socket_context.Connected(packet.to, packet.from_)
-                        conn_context.syn_seq = None
-                        context.sockets[conn_sid] = conn_context
-                        context.connected_sockets[(packet.to, packet.from_)] = conn_sid
-                        context.queue.append(conn_sid)
-                        self._socket_update_ready_status(sid, 'read', True)
-                        context.cv.notify_all()
-                    else:
+            try:
+                context: socket_context.Listening = self._socket_check_status(sid, socket_context.Listening)
+            except Exception:
+                return False
+            with context.cv:
+                conn_sid = context.connected_sockets.get((packet.to, packet.from_))
+                if conn_sid is not None:  # existing pending connection
+                    if secure:  # cannot receive data without handshake
+                        return False
+                    packet: PlainPacket
+                    conn_context = context.sockets[conn_sid]
+                    if secure != isinstance(conn_context, socket_context.SecureConnected):
                         return False
                     conn_context.pending_remote[packet.seq] = packet.payload
                     conn_context.to_ack.add((packet.seq, packet.attempt))
-                return True
+                elif packet.is_syn:  # new connection
+                    conn_sid = self._socket_allocate_id()
+                    context.queue.append(conn_sid)
+                    context.connected_sockets[(packet.to, packet.from_)] = conn_sid
+                    self._socket_update_ready_status(sid, 'read', True)
+                    context.cv.notify_all()
+                    if secure:
+                        packet: SecurePacket
+                        conn_context = socket_context.SecureConnected(
+                            packet.to,
+                            packet.from_,
+                            None,
+                            packet.dr_header.dh_pub)
+                        conn_context.recv_cursor = 1, 0
+                        conn_context.handshaked = True
+                        context.sockets[conn_sid] = conn_context
+                    else:
+                        conn_context = socket_context.Connected(packet.to, packet.from_)
+                        conn_context.syn_seq = None
+                        context.sockets[conn_sid] = conn_context
+                        packet: PlainPacket
+                        conn_context.pending_remote[packet.seq] = packet.payload
+                        conn_context.to_ack.add((packet.seq, packet.attempt))
+                else:
+                    return False
+            return True
 
-        return False
+    @staticmethod
+    def __try_parse_packet(msg: email.message.Message) -> Optional[Tuple[Packet, bool]]:
+        with contextlib.suppress(Exception):
+            return PlainPacket.from_message(msg), False
+        with contextlib.suppress(Exception):
+            return SecurePacket.from_message(msg), True
+        return None
+
+    def __try_process_packet(self, message: Dict[bytes, Any]) -> bool:
+        msg = email.message_from_bytes(message[b'BODY[]'])
+        ret = self.__try_parse_packet(msg)
+        return ret and bool(self.__try_process_packet_connected(*ret) or self.__try_process_packet_listening(*ret))
+        # TODO: check the seq range of packet
+        # TODO: check if duplicated attempts of a packet are same
 
     def __process_ack(self, sid: int, seq: int, attempt: int):
         context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
