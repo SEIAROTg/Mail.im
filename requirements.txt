@@ -8,4 +8,6 @@ pynacl
 
 pytest
 pytest-timeout
+pytest-cov
 faker
+codecov
