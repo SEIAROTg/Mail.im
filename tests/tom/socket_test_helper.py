@@ -62,7 +62,8 @@ class SocketTestHelper:
         self.mock_store.fetch.side_effect = self.__fetch_stub
         self.mock_store.add_flags.side_effect = self.__add_flags_stub
         self.mock_listener = MagicMock()
-        self.mock_listener.idle_check.side_effect = self.__idle_check_stub
+        idle_check_stub = self.__idle_check_stub()
+        self.mock_listener.idle_check.side_effect = lambda *args, **kwargs: next(idle_check_stub, None)
         self.__patches = [
             patch_config,
             patch('smtplib.SMTP', **{'return_value.sendmail.side_effect': self.__sendmail_stub}),
@@ -174,13 +175,13 @@ class SocketTestHelper:
             response = SecurePacket(packet.to, packet.from_, set(), header, plain)
             self.feed_messages({-1:  response})
 
-    def __idle_check_stub(self, timeout=None, selfpipe=None):
+    def __idle_check_stub(self):
         with self.__cv_listen:
             while True:
                 if self.__closed:
                     return
                 if self.__messages:
-                    return [(len(self.__messages), b'EXISTS')]
+                    yield [(len(self.__messages), b'EXISTS')]
                 self.__cv_listen.wait()
 
     def __search_stub(self, criteria):
