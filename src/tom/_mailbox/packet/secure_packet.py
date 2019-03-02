@@ -43,7 +43,10 @@ class SecurePacket(Packet):
     def from_pb(cls, endpoints: Tuple[Endpoint, Endpoint], packet: packet_pb2.SecurePacket) -> SecurePacket:
         is_syn = packet.header.is_syn
         acks = set((id.seq, id.attempt) for id in packet.header.acks)
-        dr_header = doubleratchet.header.Header(packet.header.dh_pub, packet.header.n, packet.header.pn)
+        dh_pub = packet.header.dh_pub
+        n = packet.header.n
+        pn = packet.header.pn if packet.header.pn != -1 else None
+        dr_header = doubleratchet.header.Header(dh_pub, n, pn)
         body = packet.body
         return cls(endpoints[0], endpoints[1], acks, dr_header, body, is_syn)
 
@@ -67,7 +70,7 @@ class SecurePacket(Packet):
         packet.header.acks.extend(acks)
         packet.header.dh_pub = self.dr_header.dh_pub
         packet.header.n = self.dr_header.n
-        packet.header.pn = self.dr_header.pn
+        packet.header.pn = self.dr_header.pn if self.dr_header.pn is not None else -1
         packet.body = self.body
         return packet
 
@@ -91,7 +94,8 @@ class SecurePacket(Packet):
             return PlainPacket(self.from_, self.to, -1, 0, set(self.acks), b'', self.is_syn)
         cleartext = ratchet.decryptMessage(self.body, self.dr_header)
         packet = packet_pb2.PlainPacket()
-        packet.header.is_syn = self.is_syn
-        packet.header.acks = set(self.acks)
         packet.body.ParseFromString(cleartext)
-        return PlainPacket.from_pb((self.from_, self.to), packet)
+        plain_packet = PlainPacket.from_pb((self.from_, self.to), packet)
+        plain_packet.is_syn = self.is_syn
+        plain_packet.acks = set(self.acks)
+        return plain_packet

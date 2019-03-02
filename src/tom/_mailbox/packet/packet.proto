@@ -25,7 +25,7 @@ message SecurePacketHeader {
     repeated PacketId acks = 2;
     bytes dh_pub = 103;
     uint64 n = 104;
-    uint64 pn = 105;
+    int64 pn = 105;
 }
 
 message SecurePacket {
