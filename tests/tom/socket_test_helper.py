@@ -147,9 +147,6 @@ class SocketTestHelper:
         assert self.__sem_send.acquire(timeout=timeout), 'packet has not been sent in time'
         with self.__mutex:
             sent_packet = self.__send_queue.popleft()
-            if sent_packet != packet:
-                a = 1
-                b = 2
             assert sent_packet == packet, 'packet has not been sent in time'
             assert not min_time or start + min_time < time.time(), 'packet was sent too early'
 

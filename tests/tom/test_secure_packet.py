@@ -112,8 +112,8 @@ def test_decrypt(faker: Faker, packet: SecurePacket, mock_plain_packet_pb: Magic
 
     ret = packet.decrypt(ratchet_stub)
 
-    assert plain_packet_pb_stub.header.is_syn == packet.is_syn
-    assert plain_packet_pb_stub.header.acks == packet.acks
+    assert ret.is_syn == packet.is_syn
+    assert ret.acks == packet.acks
     plain_packet_pb_stub.body.ParseFromString.called_once_with(cleartext_stub)
     mock_plain_packet.from_pb.assert_called_once_with((packet.from_, packet.to), plain_packet_pb_stub)
     assert ret == mock_plain_packet.from_pb.return_value
