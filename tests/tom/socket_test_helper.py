@@ -179,9 +179,9 @@ class SocketTestHelper:
             while True:
                 if self.__closed:
                     return
-                self.__cv_listen.wait()
                 if self.__messages:
                     return [(len(self.__messages), b'EXISTS')]
+                self.__cv_listen.wait()
 
     def __search_stub(self, criteria):
         assert criteria == 'UNSEEN', 'unsupported search criteria'
