@@ -11,8 +11,6 @@ import src.config
 
 @dataclass()
 class PlainPacket(Packet):
-    from_: Endpoint
-    to: Endpoint
     seq: int
     attempt: int
     acks: Set[Tuple[int, int]]           # {(seq, attempt)}

@@ -1,16 +1,15 @@
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 import functools
 import time
 import pickle
 import doubleratchet.header
-from .mailbox_tasks import MailboxTasks
+from .mailbox_listener import MailboxListener
 from . import socket_context
 from ..endpoint import Endpoint
 from .packet import SecurePacket, PlainPacket
-import src.config
 
 
-class MailboxSocketInterface(MailboxTasks):
+class MailboxSocketInterface(MailboxListener):
     def socket_create(self) -> int:
         with self._mutex:
             sid = self._socket_allocate_id()
@@ -83,42 +82,74 @@ class MailboxSocketInterface(MailboxTasks):
     def socket_accept(
             self,
             sid: int,
-            should_accept: Optional[Callable[[Endpoint, Endpoint, bool], bool]] = None,
+            should_accept: Optional[Callable[[Endpoint, Endpoint, bool], Union[bool, bytes]]] = None,
             timeout: Optional[float] = None
     ) -> Optional[int]:
         context: socket_context.Listening = self._socket_check_status(sid, socket_context.Listening)
         with context.cv:
-            found = False
-            while not found:
-                while not context.closed and not context.queue and (timeout is None or timeout > 0):
-                    start = time.time()
-                    context.cv.wait(timeout)
-                    if timeout is not None:
-                        timeout -= time.time() - start
-                if context.closed:
-                    raise Exception('socket already closed')
-                if not context.queue: # timeout
-                    return None
-                conn_sid = context.queue.popleft()
-                conn_context: socket_context.Connected = context.sockets[conn_sid]
-                del context.connected_sockets[(conn_context.local_endpoint, conn_context.remote_endpoint)]
-                del context.sockets[conn_sid]
-                secure = isinstance(conn_context, socket_context.SecureConnected)
-                found = should_accept is None \
-                    or should_accept(conn_context.local_endpoint, conn_context.remote_endpoint, secure)
-            if secure:
-                packet = PlainPacket(conn_context.local_endpoint, conn_context.remote_endpoint, 0, 0, set(), b'')
-                packet = SecurePacket.encrypt(packet, conn_context.ratchet)
-                conn_context.next_seq = 1
-                conn_context.pending_local[0] = packet
-                self._task_transmit(conn_sid, conn_context, 0)
+            while True:
+                decision = False
+                while decision == False:
+                    while not context.closed and not context.queue and (timeout is None or timeout > 0):
+                        start = time.time()
+                        context.cv.wait(timeout)
+                        if timeout is not None:
+                            timeout -= time.time() - start
+                    if context.closed:
+                        raise Exception('socket already closed')
+                    if not context.queue: # timeout
+                        return None
+                    conn_sid = context.queue.popleft()
+                    conn_context: socket_context.Connected = context.sockets[conn_sid]
+                    del context.connected_sockets[(conn_context.local_endpoint, conn_context.remote_endpoint)]
+                    del context.sockets[conn_sid]
+                    secure = isinstance(conn_context, socket_context.SecureConnected)
+                    decision = should_accept is None \
+                        or should_accept(conn_context.local_endpoint, conn_context.remote_endpoint, secure)
+                if secure and decision == True:  # new secure connection
+                    conn_context: socket_context.SecureConnected
+                    dh_pub = conn_context.pending_packets[0].dr_header.dh_pub
+                    for packet in conn_context.pending_packets:
+                        if not packet.is_syn or packet.body or packet.dr_header.dh_pub != dh_pub:
+                            continue
+                    conn_context = socket_context.SecureConnected(
+                        conn_context.local_endpoint,
+                        conn_context.remote_endpoint,
+                        None,
+                        dh_pub)
+                    packet = PlainPacket(conn_context.local_endpoint, conn_context.remote_endpoint, 0, 0, set(), b'')
+                    packet = SecurePacket.encrypt(packet, conn_context.ratchet)
+                    conn_context.next_seq = 1
+                    conn_context.recv_cursor = 1, 0
+                    conn_context.pending_local[0] = packet
+                else:  # plain or restore connection
+                    pending_packets = conn_context.pending_packets
+                    if decision == True:
+                        conn_context = socket_context.Connected(conn_context.local_endpoint, conn_context.remote_endpoint)
+                    else:
+                        old_conn_context = conn_context
+                        conn_context = pickle.loads(decision)
+                        if secure != isinstance(conn_context, socket_context.SecureConnected):
+                            continue
+                        conn_context.local_endpoint = old_conn_context.local_endpoint
+                        conn_context.remote_endpoint = old_conn_context.remote_endpoint
+                    for packet in pending_packets:
+                        self._process_packet_connected(sid, conn_context, packet)
+                conn_context.syn_seq = None
+                if secure:
+                    conn_context.handshaked = True
+                break
         with self._mutex:
             with context.cv:
                 if not context.queue:
                     self._socket_update_ready_status(sid, 'read', False)
             self._sockets[conn_sid] = conn_context
             self._connected_sockets[(conn_context.local_endpoint, conn_context.remote_endpoint)] = conn_sid
-            self._schedule_ack(conn_sid, conn_context)
+            if conn_context.pending_local:
+                for seq in conn_context.pending_local:
+                    self._schedule_task(0, functools.partial(self._task_transmit, conn_sid, conn_context, seq))
+            elif conn_context.to_ack:
+                self._schedule_ack(conn_sid, conn_context)
             return conn_sid
 
     def socket_send(self, sid: int, buf: bytes) -> int:

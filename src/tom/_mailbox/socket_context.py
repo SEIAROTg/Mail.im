@@ -2,7 +2,7 @@ from typing import Dict, Tuple, Set, DefaultDict, Deque, List, Optional
 from collections import defaultdict, deque
 import threading
 from src.crypto.doubleratchet import DoubleRatchet
-from .packet import Packet
+from .packet import Packet, SecurePacket
 from .. import Endpoint
 
 
@@ -49,6 +49,7 @@ class Connected(Waitable, Epollable):
     to_ack: Set[Tuple[int, int]]                                # {(seq, attempt)}
     syn_seq: int
     ack_scheduled: bool
+    pending_packets: List[SecurePacket]
     __STATE_KEYS: List[str] = [
         'local_endpoint',
         'remote_endpoint',
@@ -76,6 +77,7 @@ class Connected(Waitable, Epollable):
         self.to_ack = set()
         self.syn_seq = None
         self.ack_scheduled = False
+        self.pending_packets = []
 
     def __getstate__(self):
         return {
@@ -94,6 +96,7 @@ class Connected(Waitable, Epollable):
         else:
             self.syn_seq = self.next_seq
         self.ack_scheduled = False
+        self.pending_packets = []
 
 
 class SecureConnected(Connected):

@@ -128,3 +128,54 @@ def test_should_accept(faker: Faker, helper: SocketTestHelper):
     should_accept.assert_has_calls([
         call(local_endpoint, remote_endpoints[i], False) for i in range(3)
     ])
+
+
+@pytest.mark.timeout(5)
+def test_passive_restore(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    uid = faker.pyint()
+    socket = helper.create_connected_socket(*endpoints)
+
+    helper.feed_messages({
+        uid - 1: Packet(*reversed(endpoints), 0, 0, set(), payload)
+    })
+    time.sleep(0.5)
+    for i in range(10):
+        socket.send(payload)
+        helper.assert_sent(Packet(*endpoints, i, 0, {(0, 0)}, payload))
+    assert socket.recv(10) == payload[:10]
+    helper.feed_messages({uid: Packet(*reversed(endpoints), -1, 0, {(i, 0) for i in range(10)}, b'')})
+    socket.send(payload)
+    helper.assert_sent(Packet(*endpoints, 10, 0, {(0, 0)}, payload))
+    time.sleep(0.5)
+    socket.shutdown()
+    dump = socket.dump()
+    socket.close()
+
+    listening_socket = helper.create_listening_socket(endpoints[0])
+    helper.defer(lambda: helper.feed_messages({uid+1: Packet(*reversed(endpoints), 1, 0, set(), payload, is_syn=True)}), 0.5)
+    socket = listening_socket.accept(lambda *args: dump)
+
+    assert socket.recv_exact(len(payload) * 2 - 10) == (payload * 2)[10:]
+    helper.assert_sent(Packet(*endpoints, 10, 1, {(1, 0)}, payload), 0.5)  # immediately retransmit
+
+
+@pytest.mark.timeout(5)
+def test_passive_restore_endpoints(faker: Faker, helper: SocketTestHelper):
+    payload = faker.binary(111)
+    endpoints = helper.fake_endpoints()
+    endpoints2 = helper.fake_endpoints()
+    uid = faker.pyint()
+    socket = helper.create_connected_socket(*endpoints)
+
+    socket.shutdown()
+    dump = socket.dump()
+    socket.close()
+
+    listening_socket = helper.create_listening_socket(endpoints2[0])
+    helper.defer(lambda: helper.feed_messages({uid+1: Packet(*reversed(endpoints2), 0, 0, set(), payload, is_syn=True)}), 0.5)
+    socket = listening_socket.accept(lambda *args: dump)
+    socket.send(payload)
+
+    helper.assert_sent(Packet(*endpoints2, 0, 0, {(0, 0)}, payload), 0.5)

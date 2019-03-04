@@ -4,7 +4,7 @@ from .mailbox_socket_interface import MailboxSocketInterface
 from .mailbox_epoll_interface import MailboxEpollInterface
 
 
-class Mailbox(MailboxListener, MailboxSocketInterface, MailboxEpollInterface):
+class Mailbox(MailboxSocketInterface, MailboxEpollInterface):
     def __init__(self, smtp: Credential, imap: Credential):
         """
         Initialize and connect to a new mailbox.

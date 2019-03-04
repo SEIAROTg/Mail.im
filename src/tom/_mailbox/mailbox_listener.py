@@ -74,6 +74,37 @@ class MailboxListener(MailboxTasks):
         if seens:
             self.__store.add_flags(seens, [imapclient.SEEN])
 
+    def _process_packet_connected(self, sid: int, context: socket_context.Connected, packet: Packet):
+        secure = isinstance(context, socket_context.SecureConnected)
+        with context.cv:
+            if secure:
+                packet: SecurePacket
+                context: socket_context.SecureConnected
+                packet = packet.decrypt(context.ratchet)
+            packet: PlainPacket
+            for ack_seq, ack_attempt in packet.acks:
+                self.__process_ack(context, ack_seq, ack_attempt)
+            if packet.seq != -1 and packet.seq >= context.recv_cursor[0]:
+                # no action for pure ack and duplicated packets
+                context.pending_remote[packet.seq] = packet.payload
+                context.to_ack.add((packet.seq, packet.attempt))
+                self._schedule_ack(sid, context)
+
+                seq, off = context.recv_cursor
+                while context.pending_remote.get(seq) == b'':
+                    del context.pending_remote[seq]
+                    seq += 1
+                    off = 0
+                context.recv_cursor = seq, off
+                if context.pending_remote.get(seq):
+                    self._socket_update_ready_status(sid, 'read', True)
+                elif secure and packet.seq == 0:  # handshake response
+                    del context.attempts[0]
+                    del context.pending_local[0]
+                context.syn_seq = None
+                context.cv.notify_all()
+        return True
+
     def __try_process_packet_connected(self, packet: Packet, secure: bool) -> bool:
         with self._mutex:
             sid = self._connected_sockets.get((packet.to, packet.from_))
@@ -83,33 +114,7 @@ class MailboxListener(MailboxTasks):
                 return False
             if secure != isinstance(context, socket_context.SecureConnected):
                 return False
-            with context.cv:
-                if secure:
-                    packet: SecurePacket
-                    context: socket_context.SecureConnected
-                    packet = packet.decrypt(context.ratchet)
-                packet: PlainPacket
-                for ack_seq, ack_attempt in packet.acks:
-                    self.__process_ack(sid, ack_seq, ack_attempt)
-                if packet.seq != -1 and packet.seq >= context.recv_cursor[0]:
-                    # no action for pure ack and duplicated packets
-                    context.pending_remote[packet.seq] = packet.payload
-                    context.to_ack.add((packet.seq, packet.attempt))
-                    self._schedule_ack(sid, context)
-
-                    seq = context.recv_cursor[0]
-                    while context.pending_remote.get(seq) == b'':
-                        del context.pending_remote[seq]
-                        seq += 1
-                    context.recv_cursor = (seq, 0)
-                    if context.pending_remote.get(seq):
-                        self._socket_update_ready_status(sid, 'read', True)
-                    elif secure and packet.seq == 0:  # handshake response
-                        del context.attempts[0]
-                        del context.pending_local[0]
-                    context.syn_seq = None
-                    context.cv.notify_all()
-            return True
+            return self._process_packet_connected(sid, context, packet)
 
     def __try_process_packet_listening(self, packet: Packet, secure: bool) -> bool:
         with self._mutex:
@@ -123,14 +128,10 @@ class MailboxListener(MailboxTasks):
             with context.cv:
                 conn_sid = context.connected_sockets.get((packet.to, packet.from_))
                 if conn_sid is not None:  # existing pending connection
-                    if secure:  # cannot receive data without handshake
-                        return False
-                    packet: PlainPacket
                     conn_context = context.sockets[conn_sid]
                     if secure != isinstance(conn_context, socket_context.SecureConnected):
                         return False
-                    conn_context.pending_remote[packet.seq] = packet.payload
-                    conn_context.to_ack.add((packet.seq, packet.attempt))
+                    conn_context.pending_packets.append(packet)
                 elif packet.is_syn:  # new connection
                     conn_sid = self._socket_allocate_id()
                     context.queue.append(conn_sid)
@@ -141,19 +142,13 @@ class MailboxListener(MailboxTasks):
                         packet: SecurePacket
                         conn_context = socket_context.SecureConnected(
                             packet.to,
-                            packet.from_,
-                            None,
-                            packet.dr_header.dh_pub)
-                        conn_context.recv_cursor = 1, 0
-                        conn_context.handshaked = True
-                        context.sockets[conn_sid] = conn_context
+                            packet.from_)
                     else:
-                        conn_context = socket_context.Connected(packet.to, packet.from_)
-                        conn_context.syn_seq = None
-                        context.sockets[conn_sid] = conn_context
-                        packet: PlainPacket
-                        conn_context.pending_remote[packet.seq] = packet.payload
-                        conn_context.to_ack.add((packet.seq, packet.attempt))
+                        conn_context = socket_context.Connected(
+                            packet.to,
+                            packet.from_)
+                    conn_context.pending_packets.append(packet)
+                    context.sockets[conn_sid] = conn_context
                 else:
                     return False
             return True
@@ -173,8 +168,7 @@ class MailboxListener(MailboxTasks):
         # TODO: check the seq range of packet
         # TODO: check if duplicated attempts of a packet are same
 
-    def __process_ack(self, sid: int, seq: int, attempt: int):
-        context: socket_context.Connected = self._socket_check_status(sid, socket_context.Connected)
+    def __process_ack(self, context: socket_context.Connected, seq: int, attempt: int):
         total_attempts = context.attempts.get(seq)
         if total_attempts is None:
             # duplicated ack

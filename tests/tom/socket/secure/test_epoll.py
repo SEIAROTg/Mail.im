@@ -174,15 +174,15 @@ def test_read_accept(faker: Faker, helper: SocketTestHelper):
 @pytest.mark.timeout(5)
 def test_read_accept_reset(faker: Faker, helper: SocketTestHelper):
     payload = faker.binary(111)
+    uid = faker.pyint()
     endpoints = helper.fake_endpoints()
     socket = helper.create_listening_socket(endpoints[0])
     epoll = helper.create_epoll()
     epoll.add({socket}, {socket})
 
-    helper.defer(lambda: helper.feed_messages({
-        faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 0, 0, set(), payload, is_syn=True), None),
-    }), 0.5)
+    handshake_packet = SecurePacket.encrypt(PlainPacket(*reversed(endpoints), 0, 0, set(), b'', is_syn=True), None)
+    handshake_packet.body = b''
+    helper.defer(lambda: helper.feed_messages({uid: handshake_packet}), 0.5)
     socket.accept()
     rrset, rxset = epoll.wait(timeout=0)
 

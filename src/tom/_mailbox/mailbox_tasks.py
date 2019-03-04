@@ -50,7 +50,7 @@ class MailboxTasks(MailboxBase):
         while True:
             with self.__cv_tasks:
                 if self.__closed:
-                   break
+                    break
                 while not self.__closed and (not self.__scheduled_tasks or self.__scheduled_tasks[0][0] > time.time()):
                     if self.__scheduled_tasks:
                         self.__cv_tasks.wait(self.__scheduled_tasks[0][0] - time.time())
@@ -138,7 +138,7 @@ class MailboxTasks(MailboxBase):
                         packet.is_syn)
             msg = packet.to_message()
             context.ack_scheduled = False
-        with self._mutex:
+        with self.__mutex_transport:
             self.__transport.sendmail(local_endpoint.address, remote_endpoint.address, msg.as_bytes())
         if seq != -1:  # do not retransmit pure acks
             self._schedule_task(src.config.config['tom']['RTO'] / 1000, functools.partial(self._task_transmit, sid, context, seq))
