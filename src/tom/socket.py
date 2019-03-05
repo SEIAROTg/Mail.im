@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 from . import Mailbox, Endpoint
 
 
@@ -66,15 +66,18 @@ class Socket:
 
     def accept(
             self,
-            should_accept: Optional[Callable[[Endpoint, Endpoint, bool], bool]] = None,
+            should_accept: Optional[Callable[[Endpoint, Endpoint, bool], Union[bool, bytes]]] = None,
             timeout: Optional[float] = None
     ) -> Optional[Socket]:
         """
         Accept an incoming connection. The socket must be bound and listening.
 
         :param should_accept: a function that decides whether to accept the connection. This function will be given
-        three arguments: `local_endpoint: Endpoint`, `remote_endpoint: Endpoint` and `secure: bool`. The connection
-        will be accepted iff this function returns `True`.
+        three arguments: `local_endpoint: Endpoint`, `remote_endpoint: Endpoint` and `secure: bool`. The possible
+        return values are:
+            * `False`:  Decline the connection
+            * `True`: Accept as a new connection
+            * a bytes-like object: Restore the connection from a dump
         :param timeout: operation timeout in seconds. Omit to wait indefinitely.
         :return: an connected socket.
         """
