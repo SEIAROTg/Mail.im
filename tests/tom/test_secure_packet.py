@@ -117,3 +117,25 @@ def test_decrypt(faker: Faker, packet: SecurePacket, mock_plain_packet_pb: Magic
     plain_packet_pb_stub.body.ParseFromString.called_once_with(cleartext_stub)
     mock_plain_packet.from_pb.assert_called_once_with((packet.from_, packet.to), plain_packet_pb_stub)
     assert ret == mock_plain_packet.from_pb.return_value
+
+
+def test_size_obfuscation(faker: Faker):
+    serialized_body_stub = faker.binary(133)
+    body_stub = Mock(payload=faker.binary(123), obfuscation=b'')
+    body_stub.SerializeToString.return_value = serialized_body_stub
+    plain_packet_stub = MagicMock()
+    plain_packet_stub.to_pb.return_value.body = body_stub
+    plain_packet_stub.is_syn = Mock()
+    plain_packet_stub.from_ = Mock()
+    plain_packet_stub.to = Mock()
+    plain_packet_stub.acks = set(zip(faker.pylist(10, False, int), faker.pylist(10, False, int)))
+    cipher_stub = {
+        'header': Mock(),
+        'ciphertext': faker.binary(111),
+    }
+    ratchet_stub = MagicMock()
+    ratchet_stub.encryptMessage.return_value = cipher_stub
+
+    packet = SecurePacket.encrypt(plain_packet_stub, ratchet_stub)
+
+    assert len(body_stub.obfuscation) == 4000 - 123

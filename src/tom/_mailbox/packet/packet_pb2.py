@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x0cpacket.proto\"(\n\x08PacketId\x12\x0b\n\x03seq\x18\x01 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\x04\"<\n\x11PlainPacketHeader\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\"5\n\nPacketBody\x12\x15\n\x02id\x18\x01 \x01(\x0b\x32\t.PacketId\x12\x10\n\x07payload\x18\xe8\x07 \x01(\x0c\"M\n\x0bPlainPacket\x12\"\n\x06header\x18\x01 \x01(\x0b\x32\x12.PlainPacketHeader\x12\x1a\n\x04\x62ody\x18\xe8\x07 \x01(\x0b\x32\x0b.PacketBody\"d\n\x12SecurePacketHeader\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\x12\x0e\n\x06\x64h_pub\x18g \x01(\x0c\x12\t\n\x01n\x18h \x01(\x04\x12\n\n\x02pn\x18i \x01(\x03\"B\n\x0cSecurePacket\x12#\n\x06header\x18\x01 \x01(\x0b\x32\x13.SecurePacketHeader\x12\r\n\x04\x62ody\x18\xe8\x07 \x01(\x0c\x62\x06proto3')
+  serialized_pb=_b('\n\x0cpacket.proto\"(\n\x08PacketId\x12\x0b\n\x03seq\x18\x01 \x01(\x03\x12\x0f\n\x07\x61ttempt\x18\x02 \x01(\x04\"<\n\x11PlainPacketHeader\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\"K\n\nPacketBody\x12\x15\n\x02id\x18\x01 \x01(\x0b\x32\t.PacketId\x12\x10\n\x07payload\x18\xe8\x07 \x01(\x0c\x12\x14\n\x0bobfuscation\x18\xe9\x07 \x01(\x0c\"M\n\x0bPlainPacket\x12\"\n\x06header\x18\x01 \x01(\x0b\x32\x12.PlainPacketHeader\x12\x1a\n\x04\x62ody\x18\xe8\x07 \x01(\x0b\x32\x0b.PacketBody\"d\n\x12SecurePacketHeader\x12\x0e\n\x06is_syn\x18\x01 \x01(\x08\x12\x17\n\x04\x61\x63ks\x18\x02 \x03(\x0b\x32\t.PacketId\x12\x0e\n\x06\x64h_pub\x18g \x01(\x0c\x12\t\n\x01n\x18h \x01(\x04\x12\n\n\x02pn\x18i \x01(\x03\"B\n\x0cSecurePacket\x12#\n\x06header\x18\x01 \x01(\x0b\x32\x13.SecurePacketHeader\x12\r\n\x04\x62ody\x18\xe8\x07 \x01(\x0c\x62\x06proto3')
 )
 
 
@@ -123,6 +123,13 @@ _PACKETBODY = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='obfuscation', full_name='PacketBody.obfuscation', index=2,
+      number=1001, type=12, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b(""),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -136,7 +143,7 @@ _PACKETBODY = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=120,
-  serialized_end=173,
+  serialized_end=195,
 )
 
 
@@ -173,8 +180,8 @@ _PLAINPACKET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=175,
-  serialized_end=252,
+  serialized_start=197,
+  serialized_end=274,
 )
 
 
@@ -232,8 +239,8 @@ _SECUREPACKETHEADER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=254,
-  serialized_end=354,
+  serialized_start=276,
+  serialized_end=376,
 )
 
 
@@ -270,8 +277,8 @@ _SECUREPACKET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=356,
-  serialized_end=422,
+  serialized_start=378,
+  serialized_end=444,
 )
 
 _PLAINPACKETHEADER.fields_by_name['acks'].message_type = _PACKETID

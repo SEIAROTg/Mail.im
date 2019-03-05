@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import email.message
 from email.utils import parseaddr, formataddr
 from email.mime.application import MIMEApplication
+import Crypto.Random
 from ... import Endpoint
 from . import packet_pb2, Packet, PlainPacket
 import doubleratchet.header
@@ -80,6 +81,7 @@ class SecurePacket(Packet):
             header = doubleratchet.header.Header(None, 0, 0)
             return cls(plain_packet.from_, plain_packet.to, set(plain_packet.acks), header, b'', plain_packet.is_syn)
         body = plain_packet.to_pb().body
+        body.obfuscation = Crypto.Random.get_random_bytes(4000 - len(body.payload) % 4000)
         cipher = ratchet.encryptMessage(body.SerializeToString())
         return cls(
             plain_packet.from_,
