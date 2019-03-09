@@ -3,6 +3,7 @@ pyyaml
 argon2_cffi
 pycryptodome
 protobuf
+XEdDSA
 DoubleRatchet
 pynacl
 

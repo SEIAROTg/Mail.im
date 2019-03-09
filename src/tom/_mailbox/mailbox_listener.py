@@ -80,7 +80,7 @@ class MailboxListener(MailboxTasks):
             if secure:
                 packet: SecurePacket
                 context: socket_context.SecureConnected
-                packet = packet.decrypt(context.ratchet)
+                packet = packet.decrypt(context.ratchet, context.xeddsa)
             packet: PlainPacket
             for ack_seq, ack_attempt in packet.acks:
                 self.__process_ack(context, ack_seq, ack_attempt)

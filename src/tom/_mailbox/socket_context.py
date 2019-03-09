@@ -1,6 +1,7 @@
 from typing import Dict, Tuple, Set, DefaultDict, Deque, List, Optional
 from collections import defaultdict, deque
 import threading
+from xeddsa.implementations.xeddsa25519 import XEdDSA, XEdDSA25519
 from src.crypto.doubleratchet import DoubleRatchet
 from .packet import Packet, SecurePacket
 from .. import Endpoint
@@ -102,27 +103,36 @@ class Connected(Waitable, Epollable):
 class SecureConnected(Connected):
     handshaked: bool
     ratchet: DoubleRatchet
+    xeddsa: XEdDSA
+    __own_sign_key: Optional[bytes]
+    __other_sign_pub: Optional[bytes]
 
     def __init__(
             self,
             local_endpoint: Endpoint,
             remote_endpoint: Endpoint,
+            own_sign_key: Optional[bytes] = None,
+            other_sign_pub: Optional[bytes] = None,
             own_key: Optional[bytes] = None,
             other_pub: Optional[bytes] = None):
         super().__init__(local_endpoint, remote_endpoint)
         self.handshaked = False
         self.ratchet = DoubleRatchet(own_key, other_pub)
+        self.__own_sign_key = own_sign_key
+        self.__other_sign_pub = other_sign_pub
+        self.xeddsa = XEdDSA25519(mont_priv=own_sign_key, mont_pub=other_sign_pub)
 
     def __getstate__(self):
-        state_self = (self.handshaked, self.ratchet.serialize())
+        state_self = (self.handshaked, self.ratchet.serialize(), self.__own_sign_key, self.__other_sign_pub)
         state_base = super().__getstate__()
         return state_base, state_self
 
     def __setstate__(self, state):
         state_base, state_self = state
         super().__setstate__(state_base)
-        self.handshaked = state_self[0]
-        self.ratchet = DoubleRatchet.fromSerialized(state_self[1])
+        self.handshaked, serialized_ratchet, self.__own_sign_key, self.__other_sign_pub = state_self
+        self.ratchet = DoubleRatchet.fromSerialized(serialized_ratchet)
+        self.xeddsa = XEdDSA25519(mont_priv=self.__own_sign_key, mont_pub=self.__other_sign_pub)
 
 
 class Listening(Waitable, Epollable):

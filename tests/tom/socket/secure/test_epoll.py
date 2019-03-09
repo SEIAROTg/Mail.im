@@ -29,7 +29,7 @@ def test_read_recv(faker: Faker, helper: SocketTestHelper):
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None),
+            PlainPacket(*reversed(endpoints), 1, 0, set(), payload)),
     }), 0.5)
     rrset, rxset = epoll.wait()
 
@@ -47,7 +47,7 @@ def test_read_recv_reset(faker: Faker, helper: SocketTestHelper):
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None),
+            PlainPacket(*reversed(endpoints), 1, 0, set(), payload)),
     }), 0.5)
     socket.recv(111)
     rrset, rxset = epoll.wait(timeout=0)
@@ -66,7 +66,7 @@ def test_read_recv_not_reset(faker: Faker, helper: SocketTestHelper):
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None),
+            PlainPacket(*reversed(endpoints), 1, 0, set(), payload)),
     }), 0.5)
     socket.recv(1)
     rrset, rxset = epoll.wait(timeout=0)
@@ -85,7 +85,7 @@ def test_read_recv_order(faker: Faker, helper: SocketTestHelper):
 
     helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 2, 0, set(), payload), None),
+            PlainPacket(*reversed(endpoints), 2, 0, set(), payload)),
     })
     rrset, rxset = epoll.wait(timeout=0.5)
 
@@ -102,7 +102,7 @@ def test_read_recv_empty_packet(faker: Faker, helper: SocketTestHelper):
 
     helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 1, 0, set(), b''), None),
+            PlainPacket(*reversed(endpoints), 1, 0, set(), b'')),
     })
     rrset, rxset = epoll.wait(timeout=0.5)
 
@@ -120,11 +120,11 @@ def test_read_recv_empty_packet_followed_by_non_empty_packets(faker: Faker, help
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 1, 0, set(), b''), None),
+            PlainPacket(*reversed(endpoints), 1, 0, set(), b'')),
     }), 0.5)
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 2, 0, set(), payload), None),
+            PlainPacket(*reversed(endpoints), 2, 0, set(), payload)),
     }), 1)
     rrset, rxset = epoll.wait()
 
@@ -142,11 +142,11 @@ def test_read_recv_empty_packet_followed_by_non_empty_packets_reversed(faker: Fa
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 1, 0, set(), b''), None),
+            PlainPacket(*reversed(endpoints), 1, 0, set(), b'')),
     }), 1)
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 2, 0, set(), payload), None),
+            PlainPacket(*reversed(endpoints), 2, 0, set(), payload)),
     }), 0.5)
     rrset, rxset = epoll.wait()
 
@@ -163,7 +163,7 @@ def test_read_accept(faker: Faker, helper: SocketTestHelper):
 
     helper.defer(lambda: helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), 0, 0, set(), b'', is_syn=True), None),
+            PlainPacket(*reversed(endpoints), 0, 0, set(), b'', is_syn=True)),
     }), 0.5)
     rrset, rxset = epoll.wait()
 
@@ -180,10 +180,9 @@ def test_read_accept_reset(faker: Faker, helper: SocketTestHelper):
     epoll = helper.create_epoll()
     epoll.add({socket}, {socket})
 
-    handshake_packet = SecurePacket.encrypt(PlainPacket(*reversed(endpoints), 0, 0, set(), b'', is_syn=True), None)
-    handshake_packet.body = b''
+    handshake_packet = SecurePacket.encrypt(PlainPacket(*reversed(endpoints), 0, 0, set(), b'', is_syn=True))
     helper.defer(lambda: helper.feed_messages({uid: handshake_packet}), 0.5)
-    socket.accept()
+    socket.accept(should_accept=helper.default_should_accept_secure)
     rrset, rxset = epoll.wait(timeout=0)
 
     assert not rrset
@@ -202,9 +201,9 @@ def test_read_accept_not_reset(faker: Faker, helper: SocketTestHelper):
 
     helper.defer(lambda: helper.feed_messages({
         uid + i: SecurePacket.encrypt(
-            PlainPacket(endpoints[i], local_endpoint, 0, 0, set(), payload, is_syn=True), None) for i in range(2)
+            PlainPacket(endpoints[i], local_endpoint, 0, 0, set(), payload, is_syn=True)) for i in range(2)
     }), 0.5)
-    socket.accept()
+    socket.accept(should_accept=helper.default_should_accept_secure)
     rrset, rxset = epoll.wait()
 
     assert rrset == {socket}
@@ -247,7 +246,7 @@ def test_remove(faker: Faker, helper: SocketTestHelper):
     epoll.add({socket}, {socket})
 
     helper.feed_messages({faker.pyint(): SecurePacket.encrypt(
-        PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None)})
+        PlainPacket(*reversed(endpoints), 1, 0, set(), payload))})
     epoll.remove({socket}, set())
     rrset, rxset = epoll.wait(timeout=0.5)
 
@@ -266,7 +265,7 @@ def test_multiple(faker: Faker, helper: SocketTestHelper):
 
     helper.feed_messages({
         faker.pyint(): SecurePacket.encrypt(
-            PlainPacket(endpoints[i], local_endpoint, 1, 0, set(), payload), None) for i in range(3)
+            PlainPacket(endpoints[i], local_endpoint, 1, 0, set(), payload)) for i in range(3)
     })
     time.sleep(0.5)
     rrset, rxset = epoll.wait()

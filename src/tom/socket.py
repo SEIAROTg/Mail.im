@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, Tuple
 from . import Mailbox, Endpoint
 
 
@@ -44,17 +44,19 @@ class Socket:
             self,
             local_endpoint: Endpoint,
             remote_endpoint: Endpoint,
-            secure: bool = False,
+            sign_key_pair: Optional[Tuple[bytes, bytes]] = None,
             timeout: Optional[float] = None):
         """
         Establish connection from a local endpoint to remote endpoint. The socket must not be connected or bound.
 
         :param local_endpoint: a complete `Endpoint` object as local endpoint.
         :param remote_endpoint: a complete `Endpoint` object as remote endpoint.
-        :param secure: a bool indicating whether to enable end-to-end encryption.
+        :param sign_key_pair: an optional pair of keys for signature in end-to-end encryption. Specify a pair of
+        bytes-like objects for local private sign key and remote public sign key to enable end-to-end encryption, or
+        specify `None` to disable.
         :param timeout: handshake timeout. Only applicable to secure connections.
         """
-        self.__mailbox.socket_connect(self.__id, local_endpoint, remote_endpoint, secure, timeout)
+        self.__mailbox.socket_connect(self.__id, local_endpoint, remote_endpoint, sign_key_pair, timeout)
 
     def listen(self, local_endpoint: Endpoint):
         """
@@ -66,7 +68,9 @@ class Socket:
 
     def accept(
             self,
-            should_accept: Optional[Callable[[Endpoint, Endpoint, bool], Union[bool, bytes]]] = None,
+            should_accept: Optional[Callable[
+                [Endpoint, Endpoint, bool],
+                Union[bool, bytes, Tuple[bytes, bytes]]]] = None,
             timeout: Optional[float] = None
     ) -> Optional[Socket]:
         """
@@ -76,8 +80,10 @@ class Socket:
         three arguments: `local_endpoint: Endpoint`, `remote_endpoint: Endpoint` and `secure: bool`. The possible
         return values are:
             * `False`:  Decline the connection
-            * `True`: Accept as a new connection
+            * `True`: Accept as a new non-secure connection
             * a bytes-like object: Restore the connection from a dump
+            * a pair of bytes-like objects: Accept as a new secure connection with the pair of bytes being local private
+              sign key and remote public sign key
         :param timeout: operation timeout in seconds. Omit to wait indefinitely.
         :return: an connected socket.
         """

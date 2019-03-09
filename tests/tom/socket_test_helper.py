@@ -72,9 +72,8 @@ class SocketTestHelper:
             patch.object(PlainPacket, 'to_message', lambda x: Mock(as_bytes=lambda: x)),
             patch.object(SecurePacket, 'from_message', packet_from_message_stub(SecurePacket)),
             patch.object(SecurePacket, 'to_message', lambda x: Mock(as_bytes=lambda: x)),
-            patch.object(SecurePacket, 'decrypt', lambda x, r: x.body),
-            patch.object(SecurePacket, 'encrypt',
-                         lambda x, r: SecurePacket(x.from_, x.to, set(x.acks), self.fake_dr_header(), x, x.is_syn)),
+            patch.object(SecurePacket, 'decrypt', lambda x, *args: x.body),
+            patch.object(SecurePacket, 'encrypt', self.__secure_packet_encrypt_stub),
             patch.object(KeyPair, 'generate', lambda: KeyPair()),
             patch('email.message_from_bytes', lambda x: x),
         ]
@@ -109,13 +108,14 @@ class SocketTestHelper:
             self,
             local_endpoint: Optional[Endpoint] = None,
             remote_endpoint: Optional[Endpoint] = None,
+            sign_key_pair: Optional[Tuple[bytes, bytes]] = (None, None),
             timeout: Optional[float] = None):
         socket = Socket(self.mailbox)
         local_endpoint = local_endpoint or self.fake_endpoint()
         remote_endpoint = remote_endpoint or self.fake_endpoint()
-        socket.connect(local_endpoint, remote_endpoint, secure=True, timeout=timeout)
-        self.assert_sent(
-            SecurePacket(local_endpoint, remote_endpoint, set(), self.fake_dr_header(), b'', is_syn=True), 0.5)
+        socket.connect(local_endpoint, remote_endpoint, sign_key_pair, timeout=timeout)
+        self.assert_sent(self.__secure_packet_encrypt_stub(
+            PlainPacket(local_endpoint, remote_endpoint, 0, 0, set(), b'', is_syn=True)), 0.5)
         return socket
 
     def create_listening_socket(self, local_endpoint: Optional[Endpoint] = None):
@@ -168,11 +168,12 @@ class SocketTestHelper:
         with self.__mutex:
             self.__send_queue.append(packet)
         self.__sem_send.release()
-        if isinstance(packet, SecurePacket) and packet.body == b'':  # is handshake
+        if isinstance(packet, SecurePacket) and packet.body == b'' and packet.is_syn:
+            # is handshake
             dh_pub = self.__faker.binary(32)
             header = doubleratchet.header.Header(dh_pub, 0, 0)
             plain = PlainPacket(packet.to, packet.from_, 0, 0, set(), b'')
-            response = SecurePacket(packet.to, packet.from_, set(), header, plain)
+            response = SecurePacket(packet.to, packet.from_, set(), header, b'', plain)
             self.feed_messages({-1:  response})
 
     def __idle_check_stub(self):
@@ -203,6 +204,21 @@ class SocketTestHelper:
         with self.__mutex:
             self.__messages = {uid: packet for uid, packet in self.__messages.items() if uid not in uids}
 
+    @staticmethod
+    def __secure_packet_encrypt_stub(plain_packet: PlainPacket, *args):
+        if plain_packet.seq == 0 and plain_packet.is_syn:
+            body = b''
+        else:
+            body = plain_packet
+        return SecurePacket(
+            plain_packet.from_,
+            plain_packet.to,
+            set(plain_packet.acks),
+            doubleratchet.header.Header(None, 0, 0),
+            b'',
+            body,
+            plain_packet.is_syn)
+
     def __fake_credential(self) -> Credential:
         return Credential(
             host=self.__faker.hostname(),
@@ -215,9 +231,6 @@ class SocketTestHelper:
 
     def fake_endpoints(self) -> Tuple[Endpoint, Endpoint]:
         return self.fake_endpoint(), self.fake_endpoint()
-
-    def fake_dr_header(self) -> doubleratchet.header.Header:
-        return doubleratchet.header.Header(None, 0, 0)
 
     @staticmethod
     def __make_envelope(packet: Packet) -> Envelope:
@@ -232,3 +245,7 @@ class SocketTestHelper:
             bcc=None,
             in_reply_to=None,
             message_id=None)
+
+    @staticmethod
+    def default_should_accept_secure(*args):
+        return (None, None)

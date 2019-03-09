@@ -108,9 +108,9 @@ class MailboxTasks(MailboxBase):
             if seq == -1:
                 if not acks:  # nothing to ack
                     return
-                packet = PlainPacket(context.local_endpoint, context.remote_endpoint, seq, 0, acks, b'')
+                packet: PlainPacket = PlainPacket(context.local_endpoint, context.remote_endpoint, seq, 0, acks, b'')
                 if isinstance(context, socket_context.SecureConnected):
-                    packet = SecurePacket.encrypt(packet, context.ratchet)
+                    packet = SecurePacket.encrypt(packet, context.ratchet, context.xeddsa)
             elif not seq in context.pending_local:
                 # already acked
                 return

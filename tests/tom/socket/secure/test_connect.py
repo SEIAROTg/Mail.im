@@ -18,7 +18,7 @@ def test_timeout(helper: SocketTestHelper):
     socket = Socket(helper.mailbox)
     smtplib.SMTP.return_value.sendmail.side_effect = lambda *args: None
     with pytest.raises(Exception) as execinfo:
-        socket.connect(*endpoints, True, 1)
+        socket.connect(*endpoints, (None, None), 1)
     socket.close()
     assert execinfo.match('handshake timeout')
 
@@ -29,7 +29,7 @@ def test_send_without_handshake(helper: SocketTestHelper):
     socket = Socket(helper.mailbox)
     smtplib.SMTP.return_value.sendmail.side_effect = lambda *args: None
     try:
-        socket.connect(*endpoints, True, 0)
+        socket.connect(*endpoints, (None, None), 0)
     except Exception:
         pass
     with pytest.raises(Exception) as execinfo:
@@ -43,7 +43,7 @@ def test_address_in_use(helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_connected_socket(*endpoints)
     with pytest.raises(Exception) as execinfo:
-        helper.create_secure_connected_socket(*endpoints, True)
+        helper.create_secure_connected_socket(*endpoints)
     assert execinfo.match('address already in use')
 
 

@@ -2,6 +2,7 @@ from unittest.mock import patch, DEFAULT
 import pytest
 import time
 from faker import Faker
+from xeddsa.implementations.xeddsa25519 import XEdDSA25519
 from src.tom import Socket
 from src.tom._mailbox.packet import PlainPacket, SecurePacket
 from src.crypto.doubleratchet import DoubleRatchet
@@ -50,6 +51,19 @@ def test_ratchet(faker: Faker, helper: SocketTestHelper):
         DoubleRatchet.fromSerialized.assert_called_once_with(ratchet_dump)
 
 
+def test_xeddsa(faker: Faker, helper: SocketTestHelper):
+    endpoints = helper.fake_endpoints()
+    sign_key_pair = (faker.binary(32), faker.binary(32))
+    with patch.object(XEdDSA25519, '__init__', return_value=None):
+        socket = helper.create_secure_connected_socket(*endpoints, sign_key_pair)
+        XEdDSA25519.__init__.assert_called_once_with(mont_priv=sign_key_pair[0], mont_pub=sign_key_pair[1])
+        socket.shutdown()
+        dump = socket.dump()
+        XEdDSA25519.__init__.reset_mock()
+        socket = Socket.restore(helper.mailbox, dump)
+        XEdDSA25519.__init__.assert_called_once_with(mont_priv=sign_key_pair[0], mont_pub=sign_key_pair[1])
+
+
 @pytest.mark.timeout(5)
 def test_send_cursor(faker: Faker, helper: SocketTestHelper):
     payload = faker.binary(111)
@@ -59,18 +73,18 @@ def test_send_cursor(faker: Faker, helper: SocketTestHelper):
     # ack local (1, 0) to avoid uncertainty to ack remote (0, 0)
     socket.send(payload)
     helper.feed_messages({uid - 1: SecurePacket.encrypt(
-        PlainPacket(*reversed(endpoints), -1, 0, {(1, 0)}, b''), None)})
+        PlainPacket(*reversed(endpoints), -1, 0, {(1, 0)}, b''))})
     helper.assert_sent(SecurePacket.encrypt(
-        PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload), None), 0)
+        PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)), 0)
     time.sleep(0.5)
     for i in range(100):
         socket.send(payload)
         helper.feed_messages({uid + i: SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), -1, 0, {(i + 2, 0)}, b''), None)})
+            PlainPacket(*reversed(endpoints), -1, 0, {(i + 2, 0)}, b''))})
     time.sleep(0.5)
     for i in range(100):
         helper.assert_sent(SecurePacket.encrypt(
-            PlainPacket(*endpoints, i + 2, 0, set(), payload), None), 0)
+            PlainPacket(*endpoints, i + 2, 0, set(), payload)), 0)
     socket.shutdown()
     dump = socket.dump()
     socket = Socket.restore(helper.mailbox, dump)
@@ -79,7 +93,7 @@ def test_send_cursor(faker: Faker, helper: SocketTestHelper):
     socket.send(payload)
 
     helper.assert_sent(SecurePacket.encrypt(
-        PlainPacket(*endpoints, 102, 0, set(), payload, is_syn=True), None), 0.5)
+        PlainPacket(*endpoints, 102, 0, set(), payload, is_syn=True)), 0.5)
 
 
 @pytest.mark.timeout(5)
@@ -90,7 +104,7 @@ def test_recv_cursor(faker: Faker, helper: SocketTestHelper):
     socket = helper.create_secure_connected_socket(*endpoints)
     messages = {
         uid + i: SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), i + 1, 0, set(), payload), None) for i in range(100)
+            PlainPacket(*reversed(endpoints), i + 1, 0, set(), payload)) for i in range(100)
     }
     helper.feed_messages(messages)
     time.sleep(0.5)
@@ -111,12 +125,12 @@ def test_retransmit(faker: Faker, helper: SocketTestHelper):
     socket.shutdown()
     helper.assert_sent(
         SecurePacket.encrypt(
-            PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload), None), 0.5)
+            PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)), 0.5)
     dump = socket.dump()
     socket = Socket.restore(helper.mailbox, dump)
 
     helper.assert_sent(SecurePacket.encrypt(
-        PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload), None), 0.5)  # secure packet has no attempt
+        PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)), 0.5)  # secure packet has no attempt
 
 
 @pytest.mark.timeout(5)
@@ -125,11 +139,11 @@ def test_send_ack(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_secure_connected_socket(*endpoints)
     helper.feed_messages({faker.pyint(): SecurePacket.encrypt(
-        PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None)})
+        PlainPacket(*reversed(endpoints), 1, 0, set(), payload))})
     socket.recv_exact(111)
     socket.shutdown()
     dump = socket.dump()
     socket = Socket.restore(helper.mailbox, dump)
 
     helper.assert_sent(SecurePacket.encrypt(
-        PlainPacket(*endpoints, -1, 0, {(0, 0), (1, 0)}, b''), None), 1.5, 0.5)
+        PlainPacket(*endpoints, -1, 0, {(0, 0), (1, 0)}, b'')), 1.5, 0.5)

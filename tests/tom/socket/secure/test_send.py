@@ -10,7 +10,7 @@ def test_simple(faker: Faker, helper: SocketTestHelper):
     payload = faker.binary(111)
     socket = helper.create_secure_connected_socket(*endpoints)
     plain_packet = PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)
-    secure_packet = SecurePacket.encrypt(plain_packet, None)
+    secure_packet = SecurePacket.encrypt(plain_packet)
 
     socket.send(payload)
     socket.close()
@@ -26,8 +26,8 @@ def test_retransmit(faker: Faker, helper: SocketTestHelper):
     plain_packet = PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)
 
     socket.send(payload)
-    helper.assert_sent(SecurePacket.encrypt(plain_packet, None))
-    helper.assert_sent(SecurePacket.encrypt(plain_packet, None), 1.5, 0.5)
+    helper.assert_sent(SecurePacket.encrypt(plain_packet))
+    helper.assert_sent(SecurePacket.encrypt(plain_packet), 1.5, 0.5)
 
 
 @pytest.mark.timeout(5)
@@ -38,9 +38,9 @@ def test_no_retransmit_after_pure_ack(faker: Faker, helper: SocketTestHelper):
 
     socket.send(payload)
     helper.assert_sent(
-        SecurePacket.encrypt(PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload), None))
+        SecurePacket.encrypt(PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)))
     helper.feed_messages({faker.pyint(): SecurePacket.encrypt(
-        PlainPacket(*reversed(endpoints), -1, 0, {(1, 0)}, b''), None)})
+        PlainPacket(*reversed(endpoints), -1, 0, {(1, 0)}, b''))})
     helper.assert_no_packets_sent(1.5)
 
 
@@ -65,4 +65,4 @@ def test_many_packets(faker: Faker, helper: SocketTestHelper):
     for i in range(5000):
         socket.send(payload)
         helper.feed_messages({uid + i: SecurePacket.encrypt(
-            PlainPacket(*reversed(endpoints), -1, 0, {(i + 1, 0)}, b''), None)})
+            PlainPacket(*reversed(endpoints), -1, 0, {(i + 1, 0)}, b''))})

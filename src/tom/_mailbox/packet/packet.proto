@@ -10,23 +10,39 @@ message PlainPacketHeader {
     repeated PacketId acks = 2;
 }
 
-message PacketBody {
+message PlainPacketBody {
     PacketId id = 1;
     bytes payload = 1000;
-    bytes obfuscation = 1001;
 }
 
 message PlainPacket {
     PlainPacketHeader header = 1;
-    PacketBody body = 1000;
+    PlainPacketBody body = 1000;
+}
+
+message Endpoint {
+    string address = 1;
+    string port = 2;
 }
 
 message SecurePacketHeader {
     bool is_syn = 1;
     repeated PacketId acks = 2;
-    bytes dh_pub = 103;
-    uint64 n = 104;
-    int64 pn = 105;
+    bytes dh_pub = 100;
+    uint64 n = 101;
+    int64 pn = 102;
+    bytes signature = 200;
+}
+
+message SecurePacketBody {
+    PacketId id = 1;
+    bytes payload = 1000;
+    bytes obfuscation = 1001;
+}
+
+message SecurePacketSignedPart {
+    SecurePacketHeader header = 1;
+    SecurePacketBody body = 2;
 }
 
 message SecurePacket {

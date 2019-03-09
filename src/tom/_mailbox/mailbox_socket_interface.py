@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, Tuple
 import functools
 import time
 import pickle
@@ -20,7 +20,6 @@ class MailboxSocketInterface(MailboxListener):
         self._socket_shutdown(sid)
 
     def socket_close(self, sid: int):
-        # TODO: send RST
         with self._mutex:
             context = self._socket_check_status(sid, socket_context.SocketContext)
             if not context.closed:
@@ -32,28 +31,25 @@ class MailboxSocketInterface(MailboxListener):
             sid: int,
             local_endpoint: Endpoint,
             remote_endpoint: Endpoint,
-            secure: bool = False,
+            sign_key_pair: Optional[Tuple[bytes, bytes]] = None,
             timeout: Optional[float] = None):
         with self._mutex:
             self._socket_check_status(sid, socket_context.Created)
             if (local_endpoint, remote_endpoint) in self._connected_sockets:
                 raise Exception('address already in use')
             self._connected_sockets[(local_endpoint, remote_endpoint)] = sid
-            if secure:
-                context = socket_context.SecureConnected(local_endpoint, remote_endpoint)
+            if sign_key_pair is not None:
+                context = socket_context.SecureConnected(local_endpoint, remote_endpoint, *sign_key_pair)
                 context.next_seq = 1
-                context.pending_local[0] = SecurePacket(
-                    context.local_endpoint,
-                    context.remote_endpoint,
-                    set(),
-                    doubleratchet.header.Header(context.ratchet.pub, 0, 0),
-                    b'',
-                    is_syn=True)
+                context.pending_local[0] = SecurePacket.encrypt(
+                    PlainPacket(context.local_endpoint, context.remote_endpoint, 0, 0, set(), b'', is_syn=True),
+                    context.ratchet,
+                    context.xeddsa)
             else:
                 context = socket_context.Connected(local_endpoint, remote_endpoint)
                 context.syn_seq = 0
             self._sockets[sid] = context
-        if secure:
+        if sign_key_pair is not None:
             ok = True
             with context.cv:
                 self._task_transmit(sid, context, 0)
@@ -106,22 +102,26 @@ class MailboxSocketInterface(MailboxListener):
                     secure = isinstance(conn_context, socket_context.SecureConnected)
                     decision = should_accept is None \
                         or should_accept(conn_context.local_endpoint, conn_context.remote_endpoint, secure)
-                if secure and decision == True:  # new secure connection
+                if secure and type(decision) == tuple:  # new secure connection
                     conn_context: socket_context.SecureConnected
                     dh_pub = conn_context.pending_packets[0].dr_header.dh_pub
                     for packet in conn_context.pending_packets:
                         if not packet.is_syn or packet.body or packet.dr_header.dh_pub != dh_pub:
                             continue
-                    conn_context = socket_context.SecureConnected(
+                    conn_context: socket_context.SecureConnected = socket_context.SecureConnected(
                         conn_context.local_endpoint,
                         conn_context.remote_endpoint,
+                        decision[0],
+                        decision[1],
                         None,
                         dh_pub)
                     packet = PlainPacket(conn_context.local_endpoint, conn_context.remote_endpoint, 0, 0, set(), b'')
-                    packet = SecurePacket.encrypt(packet, conn_context.ratchet)
+                    packet = SecurePacket.encrypt(packet, conn_context.ratchet, conn_context.xeddsa)
                     conn_context.next_seq = 1
                     conn_context.recv_cursor = 1, 0
                     conn_context.pending_local[0] = packet
+                elif secure and type(decision) != bytes:
+                    continue
                 else:  # plain or restore connection
                     pending_packets = conn_context.pending_packets
                     if decision == True:
@@ -170,7 +170,7 @@ class MailboxSocketInterface(MailboxListener):
             if isinstance(context, socket_context.SecureConnected):
                 if not context.handshaked:
                     raise Exception('unable to send data before handshake')
-                packet = SecurePacket.encrypt(packet, context.ratchet)
+                packet = SecurePacket.encrypt(packet, context.ratchet, context.xeddsa)
             context.pending_local[seq] = packet
         self._task_transmit(sid, context, seq)
         return len(buf)

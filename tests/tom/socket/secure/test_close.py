@@ -26,7 +26,7 @@ def test_no_recv(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_secure_connected_socket(*endpoints)
     helper.feed_messages({faker.pyint(): SecurePacket.encrypt(
-        PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None)})
+        PlainPacket(*reversed(endpoints), 1, 0, set(), payload))})
     socket.recv_exact(55)
 
     socket.close()
@@ -41,7 +41,7 @@ def test_no_ack(faker: Faker, helper: SocketTestHelper):
     endpoints = helper.fake_endpoints()
     socket = helper.create_secure_connected_socket(*endpoints)
     helper.feed_messages({faker.pyint(): SecurePacket.encrypt(
-        PlainPacket(*reversed(endpoints), 1, 0, set(), payload), None)})
+        PlainPacket(*reversed(endpoints), 1, 0, set(), payload))})
 
     socket.recv_exact(111)
     socket.close()
@@ -56,6 +56,6 @@ def test_no_retransmit(faker: Faker, helper: SocketTestHelper):
     socket.send(payload)
 
     helper.assert_sent(SecurePacket.encrypt(
-        PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload), None), 0.5)
+        PlainPacket(*endpoints, 1, 0, {(0, 0)}, payload)), 0.5)
     socket.close()
     helper.assert_no_packets_sent(1.5)

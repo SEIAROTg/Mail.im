@@ -3,7 +3,8 @@ import random
 import threading
 import pytest
 from faker import Faker
-from src.tom import Credential, Mailbox, Endpoint, Socket, Epoll
+from xeddsa.implementations.xeddsa25519 import XEdDSA25519
+from src.tom import Credential, Mailbox, Endpoint, Socket
 
 
 ENV_PREFIX = 'MAILIM_INTEG_TOM_'
@@ -36,23 +37,23 @@ def imap() -> Credential:
 @pytest.mark.integ
 @pytest.mark.timeout(500)
 def test_mutual_connect(faker: Faker, smtp: Credential, imap: Credential):
-    payloads = [faker.binary(random.randint(10, 10000)) for i in range(10)]
-    port0 = faker.uuid4()
-    port1 = faker.uuid4()
+    payloads = [faker.binary(random.randint(10, 10000)) for _ in range(10)]
+    alice_port = faker.uuid4()
+    bob_port = faker.uuid4()
     mailbox = Mailbox(smtp, imap)
-    socket0 = Socket(mailbox)
-    socket1 = Socket(mailbox)
-    socket0.connect(Endpoint(imap.username, port0), Endpoint(imap.username, port1))
-    socket1.connect(Endpoint(imap.username, port1), Endpoint(imap.username, port0))
+    alice_socket = Socket(mailbox)
+    bob_socket = Socket(mailbox)
+    alice_socket.connect(Endpoint(imap.username, alice_port), Endpoint(imap.username, bob_port))
+    bob_socket.connect(Endpoint(imap.username, bob_port), Endpoint(imap.username, alice_port))
     print()
     for i in range(0, 10, 2):
-        socket0.send(payloads[i])
+        alice_socket.send(payloads[i])
         print('packet {}: sent'.format(i))
-        assert socket1.recv_exact(len(payloads[i])) == payloads[i]
+        assert bob_socket.recv_exact(len(payloads[i])) == payloads[i]
         print('packet {}: received'.format(i))
-        socket1.send(payloads[i + 1])
+        bob_socket.send(payloads[i + 1])
         print('packet {}: sent'.format(i + 1))
-        assert socket0.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
+        assert alice_socket.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
         print('packet {}: received'.format(i + 1))
     mailbox.close()
 
@@ -60,26 +61,26 @@ def test_mutual_connect(faker: Faker, smtp: Credential, imap: Credential):
 @pytest.mark.integ
 @pytest.mark.timeout(500)
 def test_listen(faker: Faker, smtp: Credential, imap: Credential):
-    payloads = [faker.binary(random.randint(10, 10000)) for i in range(10)]
-    port0 = faker.uuid4()
-    port1 = faker.uuid4()
+    payloads = [faker.binary(random.randint(10, 10000)) for _ in range(10)]
+    alice_port = faker.uuid4()
+    bob_port = faker.uuid4()
     mailbox = Mailbox(smtp, imap)
-    socket0 = Socket(mailbox)
+    alice_socket = Socket(mailbox)
     socket_listen = Socket(mailbox)
-    socket_listen.listen(Endpoint(imap.username, port1))
-    socket0.connect(Endpoint(imap.username, port0), Endpoint(imap.username, port1))
-    socket0.send(payloads[0])
-    socket1 = socket_listen.accept()
+    socket_listen.listen(Endpoint(imap.username, bob_port))
+    alice_socket.connect(Endpoint(imap.username, alice_port), Endpoint(imap.username, bob_port))
+    alice_socket.send(payloads[0])
+    bob_socket = socket_listen.accept()
     print()
     for i in range(0, 10, 2):
         if i != 0:
-            socket0.send(payloads[i])
+            alice_socket.send(payloads[i])
         print('packet {}: sent'.format(i))
-        assert socket1.recv_exact(len(payloads[i])) == payloads[i]
+        assert bob_socket.recv_exact(len(payloads[i])) == payloads[i]
         print('packet {}: received'.format(i))
-        socket1.send(payloads[i + 1])
+        bob_socket.send(payloads[i + 1])
         print('packet {}: sent'.format(i + 1))
-        assert socket0.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
+        assert alice_socket.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
         print('packet {}: received'.format(i + 1))
     mailbox.close()
 
@@ -88,26 +89,33 @@ def test_listen(faker: Faker, smtp: Credential, imap: Credential):
 @pytest.mark.timeout(500)
 def test_secure(faker: Faker, smtp: Credential, imap: Credential):
     payloads = [faker.binary(random.randint(10, 10000)) for i in range(10)]
-    port0 = faker.uuid4()
-    port1 = faker.uuid4()
+    alice_port = faker.uuid4()
+    bob_port = faker.uuid4()
+    alice_priv = XEdDSA25519.generate_mont_priv()
+    alice_pub = XEdDSA25519.mont_pub_from_mont_priv(alice_priv)
+    bob_priv = XEdDSA25519.generate_mont_priv()
+    bob_pub = XEdDSA25519.mont_pub_from_mont_priv(bob_priv)
     mailbox = Mailbox(smtp, imap)
-    socket0 = Socket(mailbox)
+    alice_socket = Socket(mailbox)
     socket_listen = Socket(mailbox)
-    socket_listen.listen(Endpoint(imap.username, port1))
+    socket_listen.listen(Endpoint(imap.username, bob_port))
     thread_connect = threading.Thread(
-        target=lambda: socket0.connect(Endpoint(imap.username, port0), Endpoint(imap.username, port1), secure=True))
+        target=lambda: alice_socket.connect(
+            Endpoint(imap.username, alice_port),
+            Endpoint(imap.username, bob_port),
+            sign_key_pair=(alice_priv, bob_pub)))
     thread_connect.start()
-    socket1 = socket_listen.accept()
+    bob_socket = socket_listen.accept(should_accept=lambda *args: (bob_priv, alice_pub))
     thread_connect.join()
     print()
     print('hand shaked')
     for i in range(0, 10, 2):
-        socket0.send(payloads[i])
+        alice_socket.send(payloads[i])
         print('packet {}: sent'.format(i))
-        assert socket1.recv_exact(len(payloads[i])) == payloads[i]
+        assert bob_socket.recv_exact(len(payloads[i])) == payloads[i]
         print('packet {}: received'.format(i))
-        socket1.send(payloads[i + 1])
+        bob_socket.send(payloads[i + 1])
         print('packet {}: sent'.format(i + 1))
-        assert socket0.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
+        assert alice_socket.recv_exact(len(payloads[i + 1])) == payloads[i + 1]
         print('packet {}: received'.format(i + 1))
     mailbox.close()
