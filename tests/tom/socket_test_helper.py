@@ -102,6 +102,7 @@ class SocketTestHelper:
         local_endpoint = local_endpoint or self.fake_endpoint()
         remote_endpoint = remote_endpoint or self.fake_endpoint()
         socket.connect(local_endpoint, remote_endpoint)
+        assert socket.endpoints == (local_endpoint, remote_endpoint)
         return socket
 
     def create_secure_connected_socket(
@@ -116,12 +117,14 @@ class SocketTestHelper:
         socket.connect(local_endpoint, remote_endpoint, sign_key_pair, timeout=timeout)
         self.assert_sent(self.__secure_packet_encrypt_stub(
             PlainPacket(local_endpoint, remote_endpoint, 0, 0, set(), b'', is_syn=True)), 0.5)
+        assert socket.endpoints == (local_endpoint, remote_endpoint)
         return socket
 
     def create_listening_socket(self, local_endpoint: Optional[Endpoint] = None):
         socket = Socket(self.mailbox)
         local_endpoint = local_endpoint or self.fake_endpoint()
         socket.listen(local_endpoint)
+        assert socket.endpoints == (local_endpoint, None)
         return socket
 
     def create_epoll(self) -> Epoll:

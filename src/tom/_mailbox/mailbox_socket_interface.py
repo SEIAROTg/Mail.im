@@ -230,3 +230,11 @@ class MailboxSocketInterface(MailboxListener):
             elif context.to_ack:
                 self._schedule_ack(sid, context)
         return sid
+
+    def socket_endpoints(self, sid: int) -> Tuple[Optional[Endpoint], Optional[Endpoint]]:
+        context = self._socket_check_status(sid, socket_context.SocketContext)
+        if isinstance(context, socket_context.Connected):
+            return context.local_endpoint, context.remote_endpoint
+        if isinstance(context, socket_context.Listening):
+            return context.local_endpoint, None
+        return None, None

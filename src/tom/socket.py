@@ -166,3 +166,10 @@ class Socket:
         :return: The id of socket. This is unique per mailbox.
         """
         return self.__id
+
+    @property
+    def endpoints(self) -> Tuple[Endpoint, Endpoint]:
+        """
+        :return: The local and remote endpoints of the socket.
+        """
+        return self.__mailbox.socket_endpoints(self.id)
