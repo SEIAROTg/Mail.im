@@ -134,6 +134,30 @@ class KeyStore:
                 return key
         return None
 
+    def get_socket_context(self, endpoints: Tuple[Endpoint, Endpoint]) -> Optional[bytes]:
+        """
+        Get stored socket dump by endpoint pair
+
+        :param endpoints: the endpoint pair of the dumped socket
+        :return: a bytes-like object for socket dump or `None` if the dump does not exist
+        """
+        self.__check_status(True)
+        return self.__keys.dumps.get(endpoints)
+
+    def set_socket_context(self, endpoints: Tuple[Endpoint, Endpoint], dump: Optional[bytes]):
+        """
+        Store a socket dump
+
+        :param endpoints: the endpoint pair of the dumped socket
+        :param dump: a bytes-like object for socket dump, or `None` to delete the stored dump
+        """
+        self.__check_status(True)
+        if dump is None:
+            del self.__keys.dumps[endpoints]
+        else:
+            self.__keys.dumps[endpoints] = dump
+        self.__save()
+
     def __save(self):
         serialized_keys = pickle.dumps(self.__keys)
         with open(self.__filename, 'wb') as f:

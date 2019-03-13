@@ -182,6 +182,20 @@ def test_user_keys(faker: Faker, mock_encrypted_file: MagicMock):
     mock_encrypted_file.dump.assert_called()
 
 
+def test_socket_context(faker: Faker, mock_encrypted_file: MagicMock):
+    path = faker.file_path()
+    store = KeyStore(path)
+    dump = faker.binary(111)
+    endpoints = tuple(Endpoint(faker.email(), faker.uuid4()) for _ in range(2))
+
+    store.initialize('')
+    store.set_socket_context(endpoints, dump)
+
+    assert store.get_socket_context(endpoints) == dump
+    assert store.get_socket_context(tuple(reversed(endpoints))) is None
+    mock_encrypted_file.dump.assert_called()
+
+
 def test_user_key(
         faker: Faker,
         mock_pickle: MagicMock,

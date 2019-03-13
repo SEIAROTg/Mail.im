@@ -12,8 +12,11 @@ class Keys:
     email: Dict[str, Credential]
     local: List[Tuple[Tuple[Endpoint, Endpoint], Key]]
     remote: List[Tuple[Tuple[Endpoint, Endpoint], Key]]
+    dumps: Dict[Tuple[Endpoint, Endpoint], bytes]
 
     def __init__(self):
         self.email = {}
         self.local = []
         self.remote = []
+        self.dumps = {}
+
