@@ -8,3 +8,22 @@
 [![license](https://img.shields.io/github/license/SEIAROTg/Mail.im.svg)](https://github.com/SEIAROTg/Mail.im)
 
 A work-in-progress messaging-over-email software
+
+### Install
+
+```sh
+git clone https://github.com/SEIAROTg/Mail.im.git
+cd Mail.im
+pip -r requirements.txt
+```
+
+### Test
+
+```sh
+pytest
+```
+
+### Documentation
+
+* [Usage](./docs/usage.md)
+* [Development](./docs/dev.md)
