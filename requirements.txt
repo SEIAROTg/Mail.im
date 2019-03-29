@@ -12,3 +12,5 @@ pytest-timeout
 pytest-cov
 faker
 codecov
+
+aiohttp

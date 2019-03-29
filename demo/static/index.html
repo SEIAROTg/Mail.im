@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mail.im</title>
+    <link rel="stylesheet" type="text/css" href="app.css">
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/spectre.css/0.5.8/spectre.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.1/css/all.min.css">
+</head>
+<body>
+    <app v-cloak>
+        <div class="center-column" v-if="status != 'joined'">
+            <div class="credentials">
+                <h1>Mail.im</h1>
+                <div class="form-group">
+                    <label class="form-label">Email Address
+                        <input class="form-input" placeholder="Your email address" v-model="credentials.email">
+                    </label>
+                    <label class="form-label" v-show="status === 'login'">Master Key
+                        <input type="password" class="form-input" placeholder="Your master key" v-model="credentials.masterKey">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">Master Key
+                        <input type="password" class="form-input" placeholder="Pick a strong password" v-model="credentials.masterKey">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">SMTP Host
+                        <input class="form-input" v-model="credentials.smtp.host">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">SMTP Port
+                        <input class="form-input" v-model="credentials.smtp.port">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">SMTP Username
+                        <input class="form-input" v-model="credentials.smtp.username">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">SMTP Password
+                        <input type="password" class="form-input" v-model="credentials.smtp.password">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">IMAP Host
+                        <input class="form-input" v-model="credentials.imap.host">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">IMAP Port
+                        <input class="form-input" v-model="credentials.imap.port">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">IMAP Username
+                        <input class="form-input" v-model="credentials.imap.username">
+                    </label>
+                    <label class="form-label" v-show="status === 'register'">IMAP Password
+                        <input type="password" class="form-input" v-model="credentials.imap.password">
+                    </label>
+                </div>
+                <div>
+                    <button class="btn btn-primary" :disabled="!ready" @click="onConnect">Connect</button>
+                </div>
+            </div>
+        </div>
+        <div class="chat h" v-if="status == 'joined'">
+            <div class="left v">
+                <div class="func-bar h">
+                    <div class="user-avatar"><img :src="gravatarUrl(credentials.email)"></div>
+                    <div class="flex"></div>
+                    <button class="big-btn hover" @click="onAddContact">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div class="contacts flex">
+                    <div class="contact h hover" v-for="contact in chat.contacts" @click="chat.currentContact = contact" :class="{active: chat.currentContact === contact}">
+                        <div class="user-avatar"><img :src="gravatarUrl(contact.email)"></div>
+                        <div class="contact-details">
+                            <div class="name">{{contact.name}}</div>
+                            <div class="email">{{contact.email}}</div>
+                        </div>
+                        <div class="flex"></div>
+                        <div class="time">{{contact.last | time}}</div>
+                    </div>
+                </div>
+            </div><!--
+            --><div class="right flex v" v-if="chat.currentContact">
+                <div class="contact-info-bar h">
+                    <div class="user-avatar"><img :src="gravatarUrl(chat.currentContact.email)"></div>
+                    <div class="contact-details">
+                        <div class="name">{{chat.currentContact.name}}</div>
+                        <div class="email">{{chat.currentContact.email}}</div>
+                    </div>
+                </div>
+                <div class="messages flex">
+                    <div v-for="message in chat.currentContact.messages" class="message" :class="{other: message.from === 'other', own: message.from === 'own'}">
+                        <div class="body">{{message.body}}</div>
+                    </div>
+                </div>
+                <div class="send-bar h">
+                    <input class="flex" v-model="chat.currentContact.typing">
+                    <button class="big-btn hover" @click="onSend">
+                        <i class="fab fa-telegram-plane"></i>
+                    </button>
+                </div>
+            </div><!--
+            --><div class="right flex v" v-if="!chat.currentContact"></div>
+        </div>
+        <div class="error" v-show="error">
+            <div class="toast toast-error">
+                <button class="btn btn-clear float-right" @click="error=null"></button>
+                {{error}}
+            </div>
+        </div>
+        <div class="modal modal-sm" id="modal-id" :class="{active: chat.addContact.active}">
+            <a class="modal-overlay" aria-label="Close"></a>
+            <div class="modal-container">
+                <div class="modal-header">
+                    <a class="btn btn-clear float-right" aria-label="Close"></a>
+                    <div class="modal-title h5">Add contact</div>
+                </div>
+                <div class="modal-body">
+                    <div class="content">
+                        <div class="form-group">
+                            <label class="form-label">Email
+                                <input class="form-input" v-model="chat.addContact.email">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @click="onCommitAddContact">Add</button>
+                    <button class="btn btn-link" @click="chat.addContact.active = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </app>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.10/vue.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.10.0/js/md5.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
