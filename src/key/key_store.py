@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 import pickle
 from ..tom import Credential, Endpoint
 from .encrypted_file import EncryptedFile
@@ -124,9 +124,9 @@ class KeyStore:
         """
         Get one user key based on endpoint pair.
 
-        :param type: one of 'local' and 'remote'
-        :param endpoints: the endpoint pair of connection
-        :return: a `Key` object for user key, or `None` if not found
+        :param type: one of 'local' and 'remote'.
+        :param endpoints: the endpoint pair of connection.
+        :return: a `Key` object for user key, or `None` if not found.
         """
         keys = self.get_user_keys(type)
         for key_endpoints, key in keys:
@@ -136,20 +136,29 @@ class KeyStore:
 
     def get_socket_context(self, endpoints: Tuple[Endpoint, Endpoint]) -> Optional[bytes]:
         """
-        Get stored socket dump by endpoint pair
+        Get stored socket dump by endpoint pair.
 
-        :param endpoints: the endpoint pair of the dumped socket
-        :return: a bytes-like object for socket dump or `None` if the dump does not exist
+        :param endpoints: the endpoint pair of the dumped socket.
+        :return: a bytes-like object for socket dump or `None` if the dump does not exist.
         """
         self.__check_status(True)
         return self.__keys.dumps.get(endpoints)
 
+    def get_socket_contexts(self) -> Dict[Tuple[Endpoint, Endpoint], bytes]:
+        """
+        Get all stored socket dump.
+
+        :return: a map from endpoint pair to bytes-like objects, each for a dump socket.
+        """
+        self.__check_status(True)
+        return self.__keys.dumps.copy()
+
     def set_socket_context(self, endpoints: Tuple[Endpoint, Endpoint], dump: Optional[bytes]):
         """
-        Store a socket dump
+        Store a socket dump.
 
-        :param endpoints: the endpoint pair of the dumped socket
-        :param dump: a bytes-like object for socket dump, or `None` to delete the stored dump
+        :param endpoints: the endpoint pair of the dumped socket.
+        :param dump: a bytes-like object for socket dump, or `None` to delete the stored dump.
         """
         self.__check_status(True)
         if dump is None:
@@ -161,7 +170,7 @@ class KeyStore:
     def __save(self):
         serialized_keys = pickle.dumps(self.__keys)
         with open(self.__filename, 'wb') as f:
-            EncryptedFile.dump(serialized_keys, self.__master_key.encode('utf-8'), f)
+            EncryptedFile.dump(self.__master_key.encode('utf-8'), serialized_keys, f)
 
     def __check_status(self, unlocked: bool):
         if self.__unlocked != unlocked:

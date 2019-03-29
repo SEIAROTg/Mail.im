@@ -58,8 +58,8 @@ def test_initialize(
     store.initialize(master_key)
 
     mock_encrypted_file.dump.assert_called_with(
-        mock_pickle.dumps.return_value,
         master_key.encode('utf-8'),
+        mock_pickle.dumps.return_value,
         mock_open.return_value.__enter__.return_value)
 
     assert_valid_status(lambda: store.get_user_keys('local'))
@@ -92,8 +92,8 @@ def test_unlock(
     # master key stored
     store.set_user_keys('local', [])
     mock_encrypted_file.dump.assert_called_once_with(
-        mock_pickle.dumps.return_value,
         master_key.encode('utf-8'),
+        mock_pickle.dumps.return_value,
         mock_open.return_value.__enter__.return_value)
 
 
@@ -143,8 +143,8 @@ def test_set_master_key(
     store.set_master_key(master_key)
 
     mock_encrypted_file.dump.assert_called_with(
-        mock_pickle.dumps.return_value,
         master_key.encode('utf-8'),
+        mock_pickle.dumps.return_value,
         mock_open.return_value.__enter__.return_value)
 
 
@@ -194,6 +194,18 @@ def test_socket_context(faker: Faker, mock_encrypted_file: MagicMock):
     assert store.get_socket_context(endpoints) == dump
     assert store.get_socket_context(tuple(reversed(endpoints))) is None
     mock_encrypted_file.dump.assert_called()
+
+
+def test_socket_contexts(faker: Faker, mock_encrypted_file: MagicMock):
+    path = faker.file_path()
+    store = KeyStore(path)
+    dumps = [faker.binary(111) for _ in range(3)]
+    endpointss = [tuple(Endpoint(faker.email(), faker.uuid4()) for _ in range(2)) for _ in range(3)]
+
+    store.initialize('')
+    for i in range(3):
+        store.set_socket_context(endpointss[i], dumps[i])
+    assert store.get_socket_contexts() == {endpointss[i]: dumps[i] for i in range(3)}
 
 
 def test_user_key(
