@@ -21,10 +21,9 @@ class MailboxSocketInterface(MailboxListener):
 
     def socket_close(self, sid: int):
         with self._mutex:
-            context = self._socket_check_status(sid, socket_context.SocketContext)
-            if not context.closed:
+            if self._sockets.get(sid):
                 self._socket_shutdown(sid)
-            del self._sockets[sid]
+                self._sockets.pop(sid, None)
 
     def socket_connect(
             self,

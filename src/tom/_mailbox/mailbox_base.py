@@ -104,6 +104,6 @@ class MailboxBase:
                     context.cv.notify_all()
                 if isinstance(context, socket_context.Connected):
                     context: socket_context.Connected
-                    del self._connected_sockets[(context.local_endpoint, context.remote_endpoint)]
+                    self._connected_sockets.pop((context.local_endpoint, context.remote_endpoint), None)
                 elif isinstance(context, socket_context.Listening):
-                    del self._listening_sockets[sid]
+                    self._listening_sockets.pop(sid, None)

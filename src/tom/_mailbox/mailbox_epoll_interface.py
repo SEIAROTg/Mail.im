@@ -73,7 +73,7 @@ class MailboxEpollInterface(MailboxBase):
 
             def __enter__(self) -> List[socket_context.Epollable]:
                 with mailbox._mutex:
-                    self.__contexts = [mailbox._socket_check_status(sid, socket_context.Epollable) for sid in sids]
+                    self.__contexts = [mailbox._sockets.get(sid) for sid in sids if isinstance(mailbox._sockets.get(sid), socket_context.Epollable)]
                 for context in self.__contexts:
                     context.mutex.acquire()
                 return self.__contexts
