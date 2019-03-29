@@ -132,8 +132,10 @@ class MailboxSocketInterface(MailboxListener):
                             continue
                         conn_context.local_endpoint = old_conn_context.local_endpoint
                         conn_context.remote_endpoint = old_conn_context.remote_endpoint
+                    context.cv.release()
                     for packet in pending_packets:
                         self._process_packet_connected(sid, conn_context, packet)
+                    context.cv.acquire()
                 conn_context.syn_seq = None
                 if secure:
                     conn_context.handshaked = True
