@@ -97,8 +97,8 @@ class SecurePacket(Packet):
     @classmethod
     def encrypt(cls, plain_packet: PlainPacket, ratchet: DoubleRatchet, xeddsa: XEdDSA) -> SecurePacket:
         if plain_packet.seq == -1:  # pure ack
-            header = doubleratchet.header.Header(None, 0, 0)
-            return cls(plain_packet.from_, plain_packet.to, set(plain_packet.acks), header, b'', plain_packet.is_syn)
+            header = doubleratchet.header.Header(b'', 0, 0)
+            return cls(plain_packet.from_, plain_packet.to, set(plain_packet.acks), header, b'', b'', plain_packet.is_syn)
         if plain_packet.seq == 0 and plain_packet.is_syn:  # handshake
             body = None
             cipher = {
@@ -127,7 +127,7 @@ class SecurePacket(Packet):
         return self
 
     def decrypt(self, ratchet: DoubleRatchet, xeddsa: XEdDSA) -> PlainPacket:
-        if self.body == b'' and self.dr_header.dh_pub is None:  # pure ack
+        if self.body == b'' and self.dr_header.dh_pub == b'':  # pure ack
             return PlainPacket(self.from_, self.to, -1, 0, set(self.acks), b'', self.is_syn)
         if self.body == b'' and self.is_syn:  # handshake
             body = None
